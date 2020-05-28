@@ -1,9 +1,9 @@
+#include <assert.h>
 #include <iostream>
 #include <string>
-#include <assert.h>
 using namespace std;
 
 int main() {
-    int a = 5 + 3;
-    cout << "hello " << a << endl;
+  int a = 5 + 3;
+  cout << "hello " << a << endl;
 }
