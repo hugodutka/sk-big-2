@@ -47,7 +47,7 @@ class ICYStream {
     addr_hints.ai_protocol = IPPROTO_TCP;
 
     if (getaddrinfo(host.c_str(), to_string(port).c_str(), &addr_hints, &addr_result)) {
-      throw "getddrinfo failed";
+      throw "getaddrinfo failed";
     }
     if (connect(sock, addr_result->ai_addr, addr_result->ai_addrlen)) {
       freeaddrinfo(addr_result);
