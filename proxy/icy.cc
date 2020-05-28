@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <cstring>
 #include <iostream>
+#include <regex>
 #include <sstream>
 #include <string>
 #include "types.hh"
@@ -15,16 +16,17 @@ using namespace std;
 
 class ICYStream {
  private:
-  static u32 const bufsz = 32768;
   string host;
   string resource;
   u32 port;
   u32 timeout;
   bool request_meta;
-  conn_t sock;
 
+  static u32 const bufsz = 32768;
+  conn_t sock;
   string request;
   u8 buf[bufsz];
+  u32 meta_offset;
 
   string build_request() {
     stringstream req;
@@ -111,11 +113,25 @@ class ICYStream {
   }
 
   void parse_headers() {
-    string header = "";
+    static std::regex rg_status("^(ICY 200 OK|HTTP\\/1.0 200 OK|HTTP\\/1.1 200 OK)\r\n$",
+                                regex_constants::ECMAScript | regex_constants::icase);
+    static std::regex rg_meta("^icy-metaint:\\s*([0-9]+)\r\n$",
+                              regex_constants::ECMAScript | regex_constants::icase);
+
+    string header = read_header();
+    if (!regex_match(header, rg_status)) throw "invalid status line";
+
+    smatch match_groups;
+    bool meta_found = false;
     while (header != "\r\n") {
       header = read_header();
-      cout << header;
+      if (request_meta && regex_match(header, match_groups, rg_meta)) {
+        meta_offset = stoul(match_groups[1]);
+        meta_found = true;
+      }
     }
+
+    if (request_meta && !meta_found) throw "meta header missing";
   }
 
  public:
@@ -132,5 +148,6 @@ class ICYStream {
     string request = build_request();
     send(request);
     parse_headers();
+    cout << meta_offset << endl;
   }
 };
