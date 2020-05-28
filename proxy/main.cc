@@ -1,9 +1,11 @@
 #include <assert.h>
 #include <iostream>
 #include <string>
+#include "icy.cc"
+
 using namespace std;
 
 int main() {
-  int a = 5 + 3;
-  cout << "hello " << a << endl;
+  ICYStream stream = ICYStream("localhost", "/", 5000, 5, true);
+  stream.test();
 }
