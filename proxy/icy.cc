@@ -1,10 +1,11 @@
 #include <netdb.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <algorithm>
+#include <cerrno>
+#include <cstring>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -37,6 +38,10 @@ class ICYStream {
 
   void setup_connection() {
     struct addrinfo addr_hints, *addr_result;
+    struct timeval connection_timeout;
+
+    connection_timeout.tv_sec = (time_t)timeout;
+    connection_timeout.tv_usec = 0;
     sock = socket(PF_INET, SOCK_STREAM, 0);
     if (sock < 0) throw "socket init failed";
 
@@ -53,12 +58,64 @@ class ICYStream {
       freeaddrinfo(addr_result);
       throw "connect failed";
     }
+
+    int status = 0;
+    try {
+      status += setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (void*)&connection_timeout,
+                           sizeof(connection_timeout));
+      status += setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (void*)&connection_timeout,
+                           sizeof(connection_timeout));
+    } catch (...) {
+    }
     freeaddrinfo(addr_result);
+
+    if (status != 0) throw "setsockopt failed";
   }
 
   void close_connection() noexcept {
     if (sock >= 0) close(sock);
     sock = -1;
+  }
+
+  void send(const string& msg) {
+    ssize_t sent_total = 0, bytes_sent = 0;
+    const char* msg_ptr = msg.c_str();
+    while ((size_t)sent_total < msg.length()) {
+      bytes_sent = write(sock, msg_ptr + bytes_sent, msg.length() - bytes_sent);
+      if (bytes_sent < 0) throw "write failed";
+      sent_total += bytes_sent;
+    };
+  }
+
+  string read_header() {
+    stringstream line;
+
+    errno = 0;
+    ssize_t num_read = 0;
+    bool stop = false;
+    char c, prev_c = '\0';  // arbitrary default other than '\r'
+    while (!stop) {
+      num_read = read(sock, &c, 1);
+      if (num_read != 1) {
+        throw "failed to read a character";
+      }
+      if (c == EOF || c == '\0') {
+        throw "read invalid character";
+      }
+      line << c;
+      stop = prev_c == '\r' && c == '\n';
+      prev_c = c;
+    }
+
+    return line.str();
+  }
+
+  void parse_headers() {
+    string header = "";
+    while (header != "\r\n") {
+      header = read_header();
+      cout << header;
+    }
   }
 
  public:
@@ -70,5 +127,10 @@ class ICYStream {
 
   ~ICYStream() { close_connection(); }
 
-  void test() { cout << request << endl; }
+  void test() {
+    setup_connection();
+    string request = build_request();
+    send(request);
+    parse_headers();
+  }
 };
