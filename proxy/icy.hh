@@ -1,10 +1,12 @@
+#ifndef ICY_HH
+#define ICY_HH
+
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <algorithm>
-#include <cerrno>
 #include <cstring>
 #include <exception>
 #include <iostream>
@@ -103,7 +105,6 @@ class ICYStream {
   string read_header() {
     stringstream line;
 
-    errno = 0;
     ssize_t num_read = 0;
     bool stop = false;
     char c, prev_c = '\0';  // arbitrary default other than '\r'
@@ -170,11 +171,17 @@ class ICYStream {
     meta_offset = 16384;  // default
   }
 
-  ~ICYStream() { close_connection(); }
+  ~ICYStream() { close_stream(); }
 
-  void open() {
-    if (sock < 0) setup_connection();
+  void open_stream() {
+    close_connection();
+    setup_connection();
+    string request = build_request();
+    send(request);
+    parse_headers();
   }
+
+  void close_stream() { close_connection(); }
 
   size_t get_chunk_size() { return meta_offset; }
 
@@ -187,20 +194,6 @@ class ICYStream {
     bool has_meta = request_meta && remaining_chunk_size == 0;
     return ICYPart(chunk_size - remaining_chunk_size, has_meta, has_meta ? read_meta() : "");
   }
-
-  void test() {
-    setup_connection();
-    string request = build_request();
-    send(request);
-    parse_headers();
-
-    size_t chunk_size = get_chunk_size();
-    shared_ptr<u8[]> chunk(new u8[chunk_size]);
-
-    for (u64 i = 0; i < 10; i++) {
-      ICYPart part = read_chunk(chunk.get());
-      cout << "read " << part.size << " bytes. has metadata: " << part.meta_present << endl;
-      cout << "meta: " << part.meta << endl;
-    }
-  }
 };
+
+#endif
