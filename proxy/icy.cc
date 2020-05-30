@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstring>
+#include <exception>
 #include <iostream>
+#include <memory>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -55,7 +57,7 @@ class ICYStream {
     connection_timeout.tv_sec = (time_t)timeout;
     connection_timeout.tv_usec = 0;
     sock = socket(PF_INET, SOCK_STREAM, 0);
-    if (sock < 0) throw "socket init failed";
+    if (sock < 0) throw Exception("socket init failed");
 
     memset(&addr_hints, 0, sizeof(struct addrinfo));
     addr_hints.ai_flags = 0;
@@ -64,11 +66,11 @@ class ICYStream {
     addr_hints.ai_protocol = IPPROTO_TCP;
 
     if (getaddrinfo(host.c_str(), to_string(port).c_str(), &addr_hints, &addr_result)) {
-      throw "getaddrinfo failed";
+      throw Exception("getaddrinfo failed");
     }
     if (connect(sock, addr_result->ai_addr, addr_result->ai_addrlen)) {
       freeaddrinfo(addr_result);
-      throw "connect failed";
+      throw Exception("connect failed");
     }
 
     int status = 0;
@@ -81,7 +83,7 @@ class ICYStream {
     }
     freeaddrinfo(addr_result);
 
-    if (status != 0) throw "setsockopt failed";
+    if (status != 0) throw Exception("setsockopt failed");
   }
 
   void close_connection() noexcept {
@@ -94,7 +96,7 @@ class ICYStream {
     const char* msg_ptr = msg.c_str();
     while ((size_t)sent_total < msg.length()) {
       bytes_sent = write(sock, msg_ptr + bytes_sent, msg.length() - bytes_sent);
-      if (bytes_sent < 0) throw "write failed";
+      if (bytes_sent < 0) throw Exception("write failed");
       sent_total += bytes_sent;
     };
   }
@@ -109,10 +111,10 @@ class ICYStream {
     while (!stop) {
       num_read = read(sock, &c, 1);
       if (num_read != 1) {
-        throw "failed to read a character";
+        throw Exception("failed to read a character");
       }
       if (c == EOF || c == '\0') {
-        throw "read invalid character";
+        throw Exception("read invalid character");
       }
       line << c;
       stop = prev_c == '\r' && c == '\n';
@@ -129,7 +131,7 @@ class ICYStream {
                               regex_constants::ECMAScript | regex_constants::icase);
 
     string header = read_header();
-    if (!regex_match(header, rg_status)) throw "invalid status line";
+    if (!regex_match(header, rg_status)) throw Exception("invalid status line");
 
     smatch match_groups;
     bool meta_found = false;
@@ -142,8 +144,10 @@ class ICYStream {
     }
 
     if (request_meta && !meta_found) request_meta = false;
-    if (!request_meta && meta_found) throw "server sent an unsupported meta header";
+    if (!request_meta && meta_found) throw Exception("server sent an unsupported meta header");
   }
+
+  string read_meta() {}
 
  public:
   ICYStream(string const& host, string const& resource, u32 port, u32 timeout, bool request_meta)
@@ -165,11 +169,12 @@ class ICYStream {
   ICYPart read_chunk(u8* buf) {
     size_t chunk_size = remaining_chunk_size > 0 ? remaining_chunk_size : meta_offset;
     ssize_t num_read = read(sock, buf, chunk_size);
-    if (num_read < 0) throw "read failed";
-    if (num_read == 0) throw "connection closed";
+    if (num_read < 0) throw Exception("read failed");
+    if (num_read == 0) throw Exception("connection closed");
 
     remaining_chunk_size = chunk_size - num_read;
-    return ICYPart(chunk_size - remaining_chunk_size, remaining_chunk_size == 0, "");
+    return ICYPart(chunk_size - remaining_chunk_size, request_meta && remaining_chunk_size == 0,
+                   "");
   }
 
   void test() {
@@ -179,7 +184,8 @@ class ICYStream {
     parse_headers();
 
     size_t chunk_size = get_chunk_size();
-    MemChunk<u8> chunk(chunk_size);
+    shared_ptr<u8[]> chunk(new u8[chunk_size]);
+
     for (u64 i = 0; i < 10; i++) {
       ICYPart part = read_chunk(chunk.get());
       cout << "read " << part.size << " bytes. has metadata: " << part.meta_present << endl;

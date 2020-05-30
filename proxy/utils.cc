@@ -1,20 +1,12 @@
-#include <cstdlib>
-#include <memory>
+#include <exception>
+#include <string>
 
 using namespace std;
 
-template <typename T>
-struct MemChunk {
-  size_t size;
-  shared_ptr<T> chunk;
+class Exception : public exception {
+  const char* msg;
+  virtual const char* what() const throw() { return msg; }
 
-  T* get() { return chunk.get(); }
-
-  MemChunk<T>(size_t size) : size(size) {
-    T* chunk_ptr = static_cast<T*>(malloc(size));
-    if (chunk_ptr == nullptr) {
-      throw "memory allocation failed";
-    }
-    chunk = shared_ptr<T>(chunk_ptr, free);
-  }
+ public:
+  Exception(const char* msg) : msg(msg) {}
 };
