@@ -1,4 +1,5 @@
 #include <csignal>
+#include <exception>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -12,10 +13,10 @@ volatile sig_atomic_t keep_running = 1;
 void signal_handler(int signum) { keep_running = 0; }
 
 int main() {
-  signal(SIGINT, signal_handler);
-  signal(SIGTERM, signal_handler);
-
   try {
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
+
     shared_ptr<Broadcaster> broadcaster = make_shared<StdoutBroadcaster>();
     ICYStream stream = ICYStream("waw02-03.ic.smcdn.pl", "/t050-1.mp3", 8000, 5, true);
     stream.open_stream();
@@ -23,7 +24,7 @@ int main() {
     size_t buf_size = stream.get_chunk_size();
     shared_ptr<u8[]> buf(new u8[buf_size]);
 
-    for (u64 i = 0; i < 100 && keep_running; i++) {
+    while (keep_running) {
       try {
         ICYPart part = stream.read_chunk(buf.get());
         broadcaster->broadcast(part, buf.get());
