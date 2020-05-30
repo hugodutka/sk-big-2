@@ -33,11 +33,11 @@ class ICYStream {
   u32 timeout;
   bool request_meta;
 
-  static u32 const bufsz = 32768;
   conn_t sock;
   string request;
   size_t meta_offset;
   size_t remaining_chunk_size;
+  char meta_buf[4096];
 
   string build_request() {
     stringstream req;
@@ -146,7 +146,20 @@ class ICYStream {
     if (!request_meta && meta_found) throw runtime_error("server sent an unsupported meta header");
   }
 
-  string read_meta() {}
+  string read_meta() {
+    ssize_t read_num;
+    read_num = read(sock, meta_buf, 1);
+    if (read_num != 1) throw runtime_error("failed to read a character");
+    ssize_t meta_length = static_cast<ssize_t>(meta_buf[0]) * 16;
+    ssize_t remaining = meta_length;
+    while (remaining > 0) {
+      read_num = read(sock, meta_buf + (meta_length - remaining), remaining);
+      if (read_num <= 0) throw runtime_error("failed to read meta");
+      remaining -= read_num;
+    }
+    meta_buf[meta_length] = '\0';
+    return string(meta_buf);
+  }
 
  public:
   ICYStream(string const& host, string const& resource, u32 port, u32 timeout, bool request_meta)
@@ -170,10 +183,9 @@ class ICYStream {
     ssize_t num_read = read(sock, buf, chunk_size);
     if (num_read < 0) throw runtime_error("read failed");
     if (num_read == 0) throw runtime_error("connection closed");
-
     remaining_chunk_size = chunk_size - num_read;
-    return ICYPart(chunk_size - remaining_chunk_size, request_meta && remaining_chunk_size == 0,
-                   "");
+    bool has_meta = request_meta && remaining_chunk_size == 0;
+    return ICYPart(chunk_size - remaining_chunk_size, has_meta, has_meta ? read_meta() : "");
   }
 
   void test() {
@@ -188,6 +200,7 @@ class ICYStream {
     for (u64 i = 0; i < 10; i++) {
       ICYPart part = read_chunk(chunk.get());
       cout << "read " << part.size << " bytes. has metadata: " << part.meta_present << endl;
+      cout << "meta: " << part.meta << endl;
     }
   }
 };
