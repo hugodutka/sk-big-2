@@ -86,8 +86,10 @@
         "variant": "cpp",
         "*.ipp": "cpp",
         "__memory": "cpp",
-        "__functional_base_03": "cpp"
+        "__functional_base_03": "cpp",
+        "*.tcc": "cpp"
     },
     "clang-format.executable": "/usr/bin/clang-format",
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2
 }

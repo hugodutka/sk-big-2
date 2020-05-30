@@ -11,8 +11,18 @@
 #include <sstream>
 #include <string>
 #include "types.hh"
+#include "utils.cc"
 
 using namespace std;
+
+struct ICYPart {
+  size_t size;
+  bool meta_present;
+  string meta;
+
+  ICYPart(size_t size, bool meta_present = false, string meta = "")
+      : size(size), meta_present(meta_present), meta(meta) {}
+};
 
 class ICYStream {
  private:
@@ -25,8 +35,8 @@ class ICYStream {
   static u32 const bufsz = 32768;
   conn_t sock;
   string request;
-  u8 buf[bufsz];
-  u32 meta_offset;
+  size_t meta_offset;
+  size_t remaining_chunk_size;
 
   string build_request() {
     stringstream req;
@@ -126,12 +136,13 @@ class ICYStream {
     while (header != "\r\n") {
       header = read_header();
       if (request_meta && regex_match(header, match_groups, rg_meta)) {
-        meta_offset = stoul(match_groups[1]);
+        meta_offset = (size_t)stoul(match_groups[1]);
         meta_found = true;
       }
     }
 
-    if (request_meta && !meta_found) throw "meta header missing";
+    if (request_meta && !meta_found) request_meta = false;
+    if (!request_meta && meta_found) throw "server sent an unsupported meta header";
   }
 
  public:
@@ -139,15 +150,39 @@ class ICYStream {
       : host(host), resource(resource), port(port), timeout(timeout), request_meta(request_meta) {
     request = build_request();
     sock = -1;
+    remaining_chunk_size = 0;
+    meta_offset = 16384;  // default
   }
 
   ~ICYStream() { close_connection(); }
+
+  void open() {
+    if (sock < 0) setup_connection();
+  }
+
+  size_t get_chunk_size() { return meta_offset; }
+
+  ICYPart read_chunk(u8* buf) {
+    size_t chunk_size = remaining_chunk_size > 0 ? remaining_chunk_size : meta_offset;
+    ssize_t num_read = read(sock, buf, chunk_size);
+    if (num_read < 0) throw "read failed";
+    if (num_read == 0) throw "connection closed";
+
+    remaining_chunk_size = chunk_size - num_read;
+    return ICYPart(chunk_size - remaining_chunk_size, remaining_chunk_size == 0, "");
+  }
 
   void test() {
     setup_connection();
     string request = build_request();
     send(request);
     parse_headers();
-    cout << meta_offset << endl;
+
+    size_t chunk_size = get_chunk_size();
+    MemChunk<u8> chunk(chunk_size);
+    for (u64 i = 0; i < 10; i++) {
+      ICYPart part = read_chunk(chunk.get());
+      cout << "read " << part.size << " bytes. has metadata: " << part.meta_present << endl;
+    }
   }
 };
