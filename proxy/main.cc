@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include "broadcaster.hh"
+#include "cmd.hh"
 #include "icy.hh"
 
 using namespace std;
@@ -12,13 +13,23 @@ volatile sig_atomic_t keep_running = 1;
 
 void signal_handler(int signum) { keep_running = 0; }
 
-int main() {
+int main(int argc, char** argv) {
   try {
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
+    CmdArgs cmd;
+    try {
+      cmd.parse(argc, argv);
+    } catch (exception& e) {
+      cerr << "Failed to parse command line arguments. Reason: " << e.what() << endl;
+      cerr << "Usage: " << argv[0] << " -h host -r resource -p port [-m yes|no] [-t timeout]"
+           << endl;
+      return 1;
+    }
+
     shared_ptr<Broadcaster> broadcaster = make_shared<StdoutBroadcaster>();
-    ICYStream stream = ICYStream("waw02-03.ic.smcdn.pl", "/t050-1.mp3", 8000, 5, true);
+    ICYStream stream = ICYStream(cmd.host, cmd.resource, cmd.port, cmd.timeout, cmd.meta);
     stream.open_stream();
 
     size_t buf_size = stream.get_chunk_size();

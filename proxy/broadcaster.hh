@@ -1,6 +1,7 @@
 #ifndef BROADCASTER_HH
 #define BROADCASTER_HH
 
+#include <iostream>
 #include "icy.hh"
 #include "types.hh"
 
