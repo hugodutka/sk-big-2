@@ -11,6 +11,14 @@
             "cwd": "${workspaceRoot}",
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb",
+            "args": [
+                "-h",
+                "waw02-03.ic.smcdn.pl",
+                "-r",
+                "/t050-1.mp3",
+                "-p",
+                "8000"
+            ],
             "environment": [],
             // "externalConsole": true,
             "filterStderr": true,

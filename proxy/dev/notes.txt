@@ -1,1 +1,2 @@
 wget --header="Icy-MetaData:1" -S -O notes/reply.txt waw02-03.ic.smcdn.pl:8000/t050-1.mp3
+valgrind --leak-check=full --show-leak-kinds=all build/main.out -h "waw02-03.ic.smcdn.pl" -r "/t050-1.mp3" -p "8000"

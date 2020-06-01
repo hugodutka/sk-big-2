@@ -28,7 +28,15 @@ int main(int argc, char** argv) {
       return 1;
     }
 
-    shared_ptr<Broadcaster> broadcaster = make_shared<StdoutBroadcaster>();
+    bool broadcast_udp = true;
+    shared_ptr<Broadcaster> broadcaster;
+    if (broadcast_udp) {
+      broadcaster = make_shared<UDPBroadcaster>(16000, "");
+    } else {
+      broadcaster = make_shared<StdoutBroadcaster>();
+    }
+    broadcaster->init();
+
     ICYStream stream = ICYStream(cmd.host, cmd.resource, cmd.port, cmd.timeout, cmd.meta);
     stream.open_stream();
 
@@ -50,6 +58,7 @@ int main(int argc, char** argv) {
     }
 
     stream.close_stream();
+    broadcaster->clean_up();
     return 0;
   } catch (exception& e) {
     cerr << "An error occurred:" << endl;
