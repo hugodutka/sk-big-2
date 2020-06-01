@@ -37,10 +37,9 @@ class StdoutBroadcaster : public Broadcaster {
 };
 
 struct ClientInfo {
-  int64_t last_contact;  // time in milliseconds
+  i64 last_contact;  // time in milliseconds
   sockaddr_in addr;
-  ClientInfo(int64_t last_contact, const sockaddr_in& addr)
-      : last_contact(last_contact), addr(addr){};
+  ClientInfo(i64 last_contact, const sockaddr_in& addr) : last_contact(last_contact), addr(addr){};
 };
 
 class UDPBroadcaster : public Broadcaster {
@@ -94,7 +93,7 @@ class UDPBroadcaster : public Broadcaster {
   }
 
   // Returns the current time in milliseconds.
-  int64_t now() {
+  i64 now() {
     return chrono::duration_cast<chrono::milliseconds>(
                chrono::system_clock::now().time_since_epoch())
         .count();
@@ -124,6 +123,30 @@ class UDPBroadcaster : public Broadcaster {
     }
 
     clients[hash_sockaddr_in(msg_sender)] = make_shared<ClientInfo>(now(), msg_sender);
+  }
+
+  void handle_incoming_msgs() {
+    while (receive_msg()) {
+      try {
+        process_msg();
+      } catch (exception& e) {
+        cerr << "Could not process an incoming message. Skipping it. Reason:" << endl;
+        cerr << e.what() << endl;
+      }
+    }
+  }
+
+  void remove_inactive_clients() {
+    i64 disconnect_after_ms = 5000;
+    i64 current_time = now();
+    auto it = clients.begin();
+    while (it != clients.end()) {
+      if (current_time - it->second->last_contact > disconnect_after_ms) {
+        it = clients.erase(it);
+      } else {
+        it++;
+      }
+    }
   }
 
  public:
@@ -176,19 +199,14 @@ class UDPBroadcaster : public Broadcaster {
   }
 
   virtual void broadcast(const ICYPart& part, const u8* data) override {
-    static u64 counter = 0;
-    bool msg_received = receive_msg();
-    if (msg_received) {
-      cerr << "I received a UDP message!" << endl;
-      try {
-        process_msg();
-      } catch (exception& e) {
-        cerr << "Could not process the message. Skipping it. Reason:" << endl;
-        cerr << e.what() << endl;
-      }
+    static i64 last_check = now();
+    i64 current_time = now();
+    handle_incoming_msgs();
+    remove_inactive_clients();
+    if (current_time - last_check > 1000) {
+      last_check = current_time;
+      cerr << "got " << clients.size() << " clients" << endl;
     }
-    // cout << ms << endl;
-    // cout << "broadcasting udp " << ++counter << endl;
   }
 };
 
