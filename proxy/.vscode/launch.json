@@ -17,7 +17,9 @@
                 "-r",
                 "/t050-1.mp3",
                 "-p",
-                "8000"
+                "8000",
+                "-m",
+                "yes"
             ],
             "environment": [],
             // "externalConsole": true,

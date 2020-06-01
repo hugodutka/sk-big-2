@@ -5,6 +5,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cstring>
@@ -16,6 +17,14 @@
 #include "types.hh"
 
 using namespace std;
+
+// UDP message types
+constexpr u16 DISCOVER = 1;
+constexpr u16 IAM = 2;
+constexpr u16 KEEPALIVE = 3;
+constexpr u16 AUDIO = 4;
+constexpr u16 METADATA = 6;
+constexpr size_t HEADER_SIZE = 4;
 
 class Broadcaster {
  public:
@@ -52,7 +61,9 @@ class UDPBroadcaster : public Broadcaster {
   struct ip_mreq ip_mreq;
 
   static const size_t msg_buf_size = 65568;
+  static const size_t chunk_buf_size = 1024 + HEADER_SIZE;
   u8 msg_buf[msg_buf_size];
+  u8 chunk_buf[chunk_buf_size];
   ssize_t msg_len;
   sockaddr_in msg_sender;
 
@@ -101,22 +112,20 @@ class UDPBroadcaster : public Broadcaster {
 
   // Processes a message that is in msg_buf.
   void process_msg() {
-    if (msg_len != 4) throw runtime_error("invalid message");
+    if (msg_len != HEADER_SIZE) throw runtime_error("invalid message");
     u16 msg_type = ntohs(((u16*)(&msg_buf))[0]);
     u16 msg_content_len = ntohs(((u16*)(&msg_buf))[1]);
     if (msg_content_len != 0) throw runtime_error("invalid message length");
 
-    if (msg_type == 1) {
-      // DISCOVER
+    if (msg_type == DISCOVER) {
       // Send back an IAM message
-      size_t response_len = 4 + radio_info.length();
+      size_t response_len = HEADER_SIZE + radio_info.length();
       shared_ptr<u8[]> response(new u8[response_len]);
-      ((u16*)response.get())[0] = 2;  // the type for IAM
+      ((u16*)response.get())[0] = IAM;
       ((u16*)response.get())[1] = static_cast<u16>(radio_info.length());
-      memcpy(response.get() + 4, radio_info.c_str(), radio_info.length());
+      memcpy(response.get() + HEADER_SIZE, radio_info.c_str(), radio_info.length());
       send_msg((sockaddr*)&msg_sender, response.get(), response_len);
-    } else if (msg_type == 3) {
-      // KEEPALIVE
+    } else if (msg_type == KEEPALIVE) {
       // do nothing
     } else {
       throw runtime_error("unexpected message type: " + to_string(msg_type));
@@ -149,12 +158,36 @@ class UDPBroadcaster : public Broadcaster {
     }
   }
 
+  void send_to_clients(u16 msg_type, const u8* data, size_t size) {
+    size_t chunk_size = chunk_buf_size - HEADER_SIZE;
+    size_t remaining_size = size;
+    size_t current_chunk_size;
+    size_t offset;
+
+    // perform at least one iteration to send empty messages such as metadata
+    do {
+      offset = size - remaining_size;
+      current_chunk_size = min(chunk_size, remaining_size);
+      remaining_size -= current_chunk_size;
+
+      ((u16*)(chunk_buf))[0] = msg_type;
+      ((u16*)(chunk_buf))[1] = static_cast<u16>(current_chunk_size);
+      memcpy(chunk_buf + HEADER_SIZE, data, current_chunk_size);
+
+      for (auto it : clients) {
+        send_msg((sockaddr*)(&it.second->addr), chunk_buf, current_chunk_size + HEADER_SIZE);
+      }
+    } while (remaining_size > 0);
+  }
+
  public:
   // setting `multiaddr` to an empty string disables multicasting
   UDPBroadcaster(u16 port, const string& multiaddr, const string& radio_info)
       : port(port), multiaddr(multiaddr), radio_info(radio_info) {
     sock = -1;
     multicast_initialized = false;
+
+    // 64000 is an arbitrary number that fits into a UDP datagram
     if (radio_info.length() > 64000) throw runtime_error("radio_info is too long");
   }
 
@@ -203,9 +236,9 @@ class UDPBroadcaster : public Broadcaster {
     i64 current_time = now();
     handle_incoming_msgs();
     remove_inactive_clients();
-    if (current_time - last_check > 1000) {
-      last_check = current_time;
-      cerr << "got " << clients.size() << " clients" << endl;
+    send_to_clients(AUDIO, data, part.size);
+    if (part.meta_present) {
+      send_to_clients(METADATA, (u8*)(part.meta.c_str()), part.meta.length());
     }
   }
 };

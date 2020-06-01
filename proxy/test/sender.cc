@@ -64,17 +64,22 @@ int main(int argc, char *argv[]) {
   if (connect(sock, (struct sockaddr *)&remote_address, sizeof remote_address) < 0)
     throw runtime_error("connect");
 
-  uint8_t buf[1024];
+  uint8_t buf[4096];
   ((uint16_t *)(&buf))[0] = htons(1);
   ((uint16_t *)(&buf))[1] = htons(0);
   length = 4;
   if (write(sock, &buf, length) != length) throw runtime_error("write");
 
-  ssize_t read_num = read(sock, &buf, 1024);
-  if (read_num < 4) throw runtime_error("read: " + to_string(read_num));
-  cerr << "read msg type: " << ((uint16_t *)(&buf))[0] << endl;
-  cerr << "read msg length: " << ((uint16_t *)(&buf))[1] << endl;
-  cerr << string(begin(buf) + 4, begin(buf) + 4 + ((uint16_t *)(&buf))[1]) << endl;
+  while (true) {
+    ssize_t read_num = read(sock, &buf, 4096);
+    if (read_num < 4) throw runtime_error("read: " + to_string(read_num));
+    cerr << "read msg type: " << ((uint16_t *)(&buf))[0] << endl;
+    cerr << "read msg length: " << ((uint16_t *)(&buf))[1] << endl;
+    ((uint16_t *)(&buf))[0] = htons(3);  // KEEPALIVE
+    ((uint16_t *)(&buf))[1] = htons(0);
+    if (write(sock, &buf, length) != length) throw runtime_error("write");
+    // cerr << string(begin(buf) + 4, begin(buf) + 4 + ((uint16_t *)(&buf))[1]) << endl;
+  }
 
   /* koniec */
   close(sock);
