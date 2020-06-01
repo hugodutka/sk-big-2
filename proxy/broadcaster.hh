@@ -5,7 +5,10 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <cerrno>
+#include <chrono>
 #include <iostream>
+#include <unordered_map>
 #include "icy.hh"
 #include "types.hh"
 
@@ -30,6 +33,13 @@ class StdoutBroadcaster : public Broadcaster {
   }
 };
 
+struct ClientInfo {
+  int64_t last_contact;  // time in milliseconds
+  sockaddr_in addr;
+  ClientInfo(int64_t last_contact, const sockaddr_in& addr)
+      : last_contact(last_contact), addr(addr){};
+};
+
 class UDPBroadcaster : public Broadcaster {
   u16 port;
   string multiaddr;
@@ -37,6 +47,41 @@ class UDPBroadcaster : public Broadcaster {
   conn_t sock;
   sockaddr_in address;
   struct ip_mreq ip_mreq;
+
+  static const size_t msg_buf_size = 65568;
+  u8 msg_buf[msg_buf_size];
+  sockaddr_in msg_sender;
+
+  unordered_map<u64, ClientInfo> clients;
+
+  // Reads a message from sock into msg_buf. Saves the address of the sender in msg_sender.
+  // Returns true if a message was read, false otherwise.
+  bool receive_msg() {
+    static socklen_t addrlen = sizeof(struct sockaddr);
+
+    errno = 0;
+    ssize_t read_len =
+        recvfrom(sock, &msg_buf, msg_buf_size, MSG_DONTWAIT, (sockaddr*)&msg_sender, &addrlen);
+
+    if (read_len < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) return false;
+      throw runtime_error("recvfrom failed");
+    }
+    return true;
+  }
+
+  u64 hash_sockaddr_in(const sockaddr_in& addr) {
+    u64 port = static_cast<u64>(addr.sin_port);
+    u64 ip = static_cast<u64>(addr.sin_addr.s_addr);
+    return (ip << 32) + port;
+  }
+
+  // Returns the current time in milliseconds.
+  int64_t now() {
+    return chrono::duration_cast<chrono::milliseconds>(
+               chrono::system_clock::now().time_since_epoch())
+        .count();
+  }
 
  public:
   // setting `multiaddr` to an empty string disables multicasting
@@ -87,7 +132,22 @@ class UDPBroadcaster : public Broadcaster {
 
   virtual void broadcast(const ICYPart& part, const u8* data) override {
     static u64 counter = 0;
-    cout << "broadcasting udp " << ++counter << endl;
+    bool msg_received = receive_msg();
+    if (msg_received) {
+      cout << "I received a UDP message!" << endl;
+      cout << "The message is:" << endl;
+      cout << string((char*)(&msg_buf)) << endl;
+      cout << "Got it from:" << endl;
+      auto hash = hash_sockaddr_in(msg_sender);
+      cout << hash_sockaddr_in(msg_sender) << endl;
+      clients.insert({hash, ClientInfo(now(), msg_sender)});
+      cout << "got " << clients.size() << " clients" << endl;
+      for (auto it = clients.begin(); it != clients.end(); it++) {
+        cout << it->first << ": " << it->second.addr.sin_port << endl;
+      }
+    }
+    // cout << ms << endl;
+    // cout << "broadcasting udp " << ++counter << endl;
   }
 };
 

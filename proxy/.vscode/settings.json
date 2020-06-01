@@ -87,7 +87,8 @@
         "*.ipp": "cpp",
         "__memory": "cpp",
         "__functional_base_03": "cpp",
-        "*.tcc": "cpp"
+        "*.tcc": "cpp",
+        "cerrno": "cpp"
     },
     "clang-format.executable": "/usr/bin/clang-format",
     "editor.formatOnSave": true,
