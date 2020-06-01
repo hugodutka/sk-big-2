@@ -31,7 +31,8 @@ int main(int argc, char** argv) {
     bool broadcast_udp = true;
     shared_ptr<Broadcaster> broadcaster;
     if (broadcast_udp) {
-      broadcaster = make_shared<UDPBroadcaster>(16000, "");
+      string radio_info = cmd.host + ":" + to_string(cmd.port) + cmd.resource;
+      broadcaster = make_shared<UDPBroadcaster>(16000, "", radio_info);
     } else {
       broadcaster = make_shared<StdoutBroadcaster>();
     }
@@ -49,7 +50,7 @@ int main(int argc, char** argv) {
         broadcaster->broadcast(part, buf.get());
       } catch (exception& e) {
         if (keep_running) {
-          throw e;
+          throw;
         } else {
           // if the program should end anyway, ignore the exception
           break;

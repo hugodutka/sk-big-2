@@ -7,7 +7,10 @@
 #include <sys/socket.h>
 #include <cerrno>
 #include <chrono>
+#include <cstring>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include "icy.hh"
 #include "types.hh"
@@ -43,6 +46,7 @@ struct ClientInfo {
 class UDPBroadcaster : public Broadcaster {
   u16 port;
   string multiaddr;
+  string radio_info;
   bool multicast_initialized;
   conn_t sock;
   sockaddr_in address;
@@ -50,11 +54,12 @@ class UDPBroadcaster : public Broadcaster {
 
   static const size_t msg_buf_size = 65568;
   u8 msg_buf[msg_buf_size];
+  ssize_t msg_len;
   sockaddr_in msg_sender;
 
-  unordered_map<u64, ClientInfo> clients;
+  unordered_map<u64, shared_ptr<ClientInfo>> clients;
 
-  // Reads a message from sock into msg_buf. Saves the address of the sender in msg_sender.
+  // Tries to read a message from sock into msg_buf. Saves the address of the sender in msg_sender.
   // Returns true if a message was read, false otherwise.
   bool receive_msg() {
     static socklen_t addrlen = sizeof(struct sockaddr);
@@ -67,7 +72,19 @@ class UDPBroadcaster : public Broadcaster {
       if (errno == EAGAIN || errno == EWOULDBLOCK) return false;
       throw runtime_error("recvfrom failed");
     }
+    msg_len = read_len;
     return true;
+  }
+
+  void send_msg(const sockaddr* addr, const u8* msg, size_t len) {
+    static socklen_t socklen = sizeof(struct sockaddr);
+    size_t sent = 0;
+
+    while (sent < len) {
+      ssize_t sent_partial = sendto(sock, msg + sent, len, 0, addr, socklen);
+      if (sent_partial <= 0) throw runtime_error("sendto failed");
+      sent += static_cast<size_t>(sent_partial);
+    }
   }
 
   u64 hash_sockaddr_in(const sockaddr_in& addr) {
@@ -83,11 +100,39 @@ class UDPBroadcaster : public Broadcaster {
         .count();
   }
 
+  // Processes a message that is in msg_buf.
+  void process_msg() {
+    if (msg_len != 4) throw runtime_error("invalid message");
+    u16 msg_type = ntohs(((u16*)(&msg_buf))[0]);
+    u16 msg_content_len = ntohs(((u16*)(&msg_buf))[1]);
+    if (msg_content_len != 0) throw runtime_error("invalid message length");
+
+    if (msg_type == 1) {
+      // DISCOVER
+      // Send back an IAM message
+      size_t response_len = 4 + radio_info.length();
+      shared_ptr<u8[]> response(new u8[response_len]);
+      ((u16*)response.get())[0] = 2;  // the type for IAM
+      ((u16*)response.get())[1] = static_cast<u16>(radio_info.length());
+      memcpy(response.get() + 4, radio_info.c_str(), radio_info.length());
+      send_msg((sockaddr*)&msg_sender, response.get(), response_len);
+    } else if (msg_type == 3) {
+      // KEEPALIVE
+      // do nothing
+    } else {
+      throw runtime_error("unexpected message type: " + to_string(msg_type));
+    }
+
+    clients[hash_sockaddr_in(msg_sender)] = make_shared<ClientInfo>(now(), msg_sender);
+  }
+
  public:
   // setting `multiaddr` to an empty string disables multicasting
-  UDPBroadcaster(u16 port, const string& multiaddr) : port(port), multiaddr(multiaddr) {
+  UDPBroadcaster(u16 port, const string& multiaddr, const string& radio_info)
+      : port(port), multiaddr(multiaddr), radio_info(radio_info) {
     sock = -1;
     multicast_initialized = false;
+    if (radio_info.length() > 64000) throw runtime_error("radio_info is too long");
   }
 
   void init() override {
@@ -134,16 +179,12 @@ class UDPBroadcaster : public Broadcaster {
     static u64 counter = 0;
     bool msg_received = receive_msg();
     if (msg_received) {
-      cout << "I received a UDP message!" << endl;
-      cout << "The message is:" << endl;
-      cout << string((char*)(&msg_buf)) << endl;
-      cout << "Got it from:" << endl;
-      auto hash = hash_sockaddr_in(msg_sender);
-      cout << hash_sockaddr_in(msg_sender) << endl;
-      clients.insert({hash, ClientInfo(now(), msg_sender)});
-      cout << "got " << clients.size() << " clients" << endl;
-      for (auto it = clients.begin(); it != clients.end(); it++) {
-        cout << it->first << ": " << it->second.addr.sin_port << endl;
+      cerr << "I received a UDP message!" << endl;
+      try {
+        process_msg();
+      } catch (exception& e) {
+        cerr << "Could not process the message. Skipping it. Reason:" << endl;
+        cerr << e.what() << endl;
       }
     }
     // cout << ms << endl;
