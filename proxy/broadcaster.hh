@@ -55,6 +55,7 @@ class UDPBroadcaster : public Broadcaster {
   u16 port;
   string multiaddr;
   string radio_info;
+  u32 timeout;
   bool multicast_initialized;
   conn_t sock;
   sockaddr_in address;
@@ -146,7 +147,7 @@ class UDPBroadcaster : public Broadcaster {
   }
 
   void remove_inactive_clients() {
-    i64 disconnect_after_ms = 5000;
+    i64 disconnect_after_ms = timeout * 1000;
     i64 current_time = now();
     auto it = clients.begin();
     while (it != clients.end()) {
@@ -182,8 +183,8 @@ class UDPBroadcaster : public Broadcaster {
 
  public:
   // setting `multiaddr` to an empty string disables multicasting
-  UDPBroadcaster(u16 port, const string& multiaddr, const string& radio_info)
-      : port(port), multiaddr(multiaddr), radio_info(radio_info) {
+  UDPBroadcaster(u16 port, const string& multiaddr, const string& radio_info, u32 timeout)
+      : port(port), multiaddr(multiaddr), radio_info(radio_info), timeout(timeout) {
     sock = -1;
     multicast_initialized = false;
 

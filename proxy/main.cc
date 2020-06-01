@@ -24,15 +24,15 @@ int main(int argc, char** argv) {
     } catch (exception& e) {
       cerr << "Failed to parse command line arguments. Reason: " << e.what() << endl;
       cerr << "Usage: " << argv[0] << " -h host -r resource -p port [-m yes|no] [-t timeout]"
-           << endl;
+           << " [-P port] [-B multi] [-T timeout]" << endl;
       return 1;
     }
 
-    bool broadcast_udp = true;
     shared_ptr<Broadcaster> broadcaster;
-    if (broadcast_udp) {
+    if (cmd.udp_port != -1) {
       string radio_info = cmd.host + ":" + to_string(cmd.port) + cmd.resource;
-      broadcaster = make_shared<UDPBroadcaster>(16000, "", radio_info);
+      broadcaster =
+          make_shared<UDPBroadcaster>(cmd.udp_port, cmd.multi, radio_info, cmd.udp_timeout);
     } else {
       broadcaster = make_shared<StdoutBroadcaster>();
     }
