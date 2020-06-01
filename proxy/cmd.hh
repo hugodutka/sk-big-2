@@ -54,6 +54,7 @@ struct CmdArgs {
         if (timeout_set) throw runtime_error("duplicate timeout flag");
         timeout_set = true;
         timeout = stoul(value);
+        if (timeout == 0) throw runtime_error("timeout cannot be set to 0");
       } else {
         throw runtime_error("unexpected flag: " + flag);
       }
