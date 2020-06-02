@@ -10,7 +10,8 @@
                 "-std=c++17",
                 "main.cc",
                 "-o",
-                "build/main.out"
+                "build/main.out",
+                "-lpthread"
             ],
             "group": {
                 "kind": "build",

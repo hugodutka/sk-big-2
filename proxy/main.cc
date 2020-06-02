@@ -1,8 +1,11 @@
 #include <csignal>
+#include <ctime>
 #include <exception>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
 #include "broadcaster.hh"
 #include "cmd.hh"
 #include "icy.hh"
@@ -11,13 +14,23 @@ using namespace std;
 
 volatile sig_atomic_t keep_running = 1;
 
-void signal_handler(int signum) { keep_running = 0; }
-
 int main(int argc, char** argv) {
-  try {
-    signal(SIGINT, signal_handler);
-    signal(SIGTERM, signal_handler);
+  sigset_t sigset;
+  sigemptyset(&sigset);
+  sigaddset(&sigset, SIGINT);
+  sigaddset(&sigset, SIGTERM);
+  pthread_sigmask(SIG_BLOCK, &sigset, nullptr);
+  auto signal_handler = [&sigset]() {
+    timespec timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_nsec = 100000000;  // 100 ms
+    while (keep_running) {
+      if (sigtimedwait(&sigset, nullptr, &timeout) != -1) keep_running = 0;
+    };
+  };
+  auto ft_signal_handler = async(launch::async, signal_handler);
 
+  try {
     CmdArgs cmd;
     try {
       cmd.parse(argc, argv);
@@ -65,9 +78,11 @@ int main(int argc, char** argv) {
     cerr << "An error occurred:" << endl;
     cerr << e.what() << endl;
     cerr << "Quitting." << endl;
+    keep_running = 0;
     return 1;
   } catch (...) {
     cerr << "An unexpected error occurred. Quitting." << endl;
+    keep_running = 0;
     return 1;
   }
 }

@@ -6,12 +6,15 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <chrono>
 #include <cstring>
 #include <iostream>
+#include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include "icy.hh"
 #include "types.hh"
@@ -70,14 +73,19 @@ class UDPBroadcaster : public Broadcaster {
 
   unordered_map<u64, shared_ptr<ClientInfo>> clients;
 
+  mutex lock;
+  thread udp_server;
+  atomic<bool> udp_server_enabled;
+  atomic<bool> udp_server_crashed;
+  exception_ptr udp_server_exception;
+
   // Tries to read a message from sock into msg_buf. Saves the address of the sender in msg_sender.
   // Returns true if a message was read, false otherwise.
   bool receive_msg() {
     static socklen_t addrlen = sizeof(struct sockaddr);
 
     errno = 0;
-    ssize_t read_len =
-        recvfrom(sock, &msg_buf, msg_buf_size, MSG_DONTWAIT, (sockaddr*)&msg_sender, &addrlen);
+    ssize_t read_len = recvfrom(sock, &msg_buf, msg_buf_size, 0, (sockaddr*)&msg_sender, &addrlen);
 
     if (read_len < 0) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) return false;
@@ -135,17 +143,6 @@ class UDPBroadcaster : public Broadcaster {
     clients[hash_sockaddr_in(msg_sender)] = make_shared<ClientInfo>(now(), msg_sender);
   }
 
-  void handle_incoming_msgs() {
-    while (receive_msg()) {
-      try {
-        process_msg();
-      } catch (exception& e) {
-        cerr << "Could not process an incoming message. Skipping it. Reason:" << endl;
-        cerr << e.what() << endl;
-      }
-    }
-  }
-
   void remove_inactive_clients() {
     i64 disconnect_after_ms = timeout * 1000;
     i64 current_time = now();
@@ -156,6 +153,27 @@ class UDPBroadcaster : public Broadcaster {
       } else {
         it++;
       }
+    }
+  }
+
+  void start_udp_server() {
+    try {
+      while (udp_server_enabled) {
+        try {
+          bool msg_received = receive_msg();
+          lock_guard<mutex> lock_g(lock);
+          if (msg_received) process_msg();
+          remove_inactive_clients();
+        } catch (exception& e) {
+          cerr << "Could not process an incoming message. Skipping it. Reason:" << endl;
+          cerr << e.what() << endl;
+        }
+      }
+    } catch (...) {
+      lock_guard<mutex> lock_g(lock);
+      udp_server_crashed = true;
+      udp_server_enabled = false;
+      udp_server_exception = current_exception();
     }
   }
 
@@ -187,12 +205,18 @@ class UDPBroadcaster : public Broadcaster {
       : port(port), multiaddr(multiaddr), radio_info(radio_info), timeout(timeout) {
     sock = -1;
     multicast_initialized = false;
+    udp_server_enabled = false;
+    udp_server_crashed = false;
 
     // 64000 is an arbitrary number that fits into a UDP datagram
     if (radio_info.length() > 64000) throw runtime_error("radio_info is too long");
   }
 
   void init() override {
+    struct timeval read_timeout;
+    read_timeout.tv_sec = 0;
+    read_timeout.tv_usec = (suseconds_t)100000;  // 100 ms
+
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) throw runtime_error("socket failed");
 
@@ -209,11 +233,20 @@ class UDPBroadcaster : public Broadcaster {
       multicast_initialized = true;
     }
 
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (void*)&read_timeout, sizeof(read_timeout)) < 0)
+      throw runtime_error("setsockopt set timeout failed");
+
     if (bind(sock, (struct sockaddr*)&address, sizeof address) < 0)
       throw runtime_error("bind failed");
+
+    udp_server_enabled = true;
+    udp_server = thread([this] { start_udp_server(); });
   }
 
   void clean_up() override {
+    udp_server_enabled = false;
+    udp_server.join();
+
     if (multicast_initialized &&
         setsockopt(sock, IPPROTO_IP, IP_DROP_MEMBERSHIP, (void*)&ip_mreq, sizeof ip_mreq) < 0) {
       throw runtime_error("setsockopt ip drop membership failed");
@@ -233,14 +266,12 @@ class UDPBroadcaster : public Broadcaster {
   }
 
   virtual void broadcast(const ICYPart& part, const u8* data) override {
-    static i64 last_check = now();
-    i64 current_time = now();
-    handle_incoming_msgs();
-    remove_inactive_clients();
+    lock_guard<mutex> lock_g(lock);
     send_to_clients(AUDIO, data, part.size);
     if (part.meta_present) {
       send_to_clients(METADATA, (u8*)(part.meta.c_str()), part.meta.length());
     }
+    if (udp_server_crashed) rethrow_exception(udp_server_exception);
   }
 };
 
