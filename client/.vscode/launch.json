@@ -1,0 +1,34 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C++ Launch",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceRoot}/build/main.out",
+            "stopAtEntry": false,
+            "preLaunchTask": "Build with g++",
+            "cwd": "${workspaceRoot}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "args": [
+                "-H",
+                "localhost",
+                "-P",
+                "16000",
+                "-p",
+                "8000"
+            ],
+            "environment": [],
+            "filterStderr": true,
+            "filterStdout": true,
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}
