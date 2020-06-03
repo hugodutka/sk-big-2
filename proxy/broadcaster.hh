@@ -130,8 +130,8 @@ class UDPBroadcaster : public Broadcaster {
       // Send back an IAM message
       size_t response_len = HEADER_SIZE + radio_info.length();
       shared_ptr<u8[]> response(new u8[response_len]);
-      ((u16*)response.get())[0] = IAM;
-      ((u16*)response.get())[1] = static_cast<u16>(radio_info.length());
+      ((u16*)response.get())[0] = htons(IAM);
+      ((u16*)response.get())[1] = htons(static_cast<u16>(radio_info.length()));
       memcpy(response.get() + HEADER_SIZE, radio_info.c_str(), radio_info.length());
       send_msg((sockaddr*)&msg_sender, response.get(), response_len);
     } else if (msg_type == KEEPALIVE) {
@@ -189,9 +189,9 @@ class UDPBroadcaster : public Broadcaster {
       current_chunk_size = min(chunk_size, remaining_size);
       remaining_size -= current_chunk_size;
 
-      ((u16*)(chunk_buf))[0] = msg_type;
-      ((u16*)(chunk_buf))[1] = static_cast<u16>(current_chunk_size);
-      memcpy(chunk_buf + HEADER_SIZE, data, current_chunk_size);
+      ((u16*)(chunk_buf))[0] = htons(msg_type);
+      ((u16*)(chunk_buf))[1] = htons(static_cast<u16>(current_chunk_size));
+      memcpy(chunk_buf + HEADER_SIZE, data + offset, current_chunk_size);
 
       for (auto it : clients) {
         send_msg((sockaddr*)(&it.second->addr), chunk_buf, current_chunk_size + HEADER_SIZE);
