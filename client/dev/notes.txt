@@ -1,0 +1,1 @@
+valgrind --leak-check=full --show-leak-kinds=all build/main.out -H localhost -P 16000 -p 8000
