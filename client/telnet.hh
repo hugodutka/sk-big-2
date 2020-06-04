@@ -83,19 +83,37 @@ class TelnetServer {
     send_msg((u8*)(command.c_str()), command.size());
   }
 
-  void accept_new_connection() {
+  bool accept_new_connection() {
     if (client_sock >= 0) close(client_sock);
 
     if (listen(sock, 1) < 0) {
       throw runtime_error("listen failed");
     }
-    client_address_len = sizeof(client_address);
-    client_sock = accept(sock, (struct sockaddr*)&client_address, &client_address_len);
-    if (client_sock < 0) {
-      throw std::runtime_error("accept failed");
-    }
 
+    fd_set set;
+    timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 100000;  // 100 ms
+
+    FD_ZERO(&set);
+    FD_SET(sock, &set);
+
+    int status = select(sock + 1, &set, NULL, NULL, &timeout);
+    if (status == -1) {
+      throw runtime_error("select failed");
+    } else if (status == 0) {
+      // timeout occured
+      return false;
+    } else {
+      client_address_len = sizeof(client_address);
+      client_sock = accept(sock, (struct sockaddr*)&client_address, &client_address_len);
+      if (client_sock < 0) {
+        throw std::runtime_error("accept failed");
+      }
+    }
     set_display_options();
+
+    return true;
   }
 
   tuple<u8, bool> read_input() {
@@ -141,10 +159,18 @@ class TelnetServer {
     bool client_sock_failed = false;
 
     if (sock >= 0) {
-      sock_failed = close(sock) != 0;
+      try {
+        sock_failed = close(sock) != 0;
+      } catch (...) {
+        sock_failed = true;
+      }
     }
     if (client_sock >= 0) {
-      client_sock_failed = close(sock) != 0;
+      try {
+        client_sock_failed = close(client_sock) != 0;
+      } catch (...) {
+        client_sock_failed = true;
+      }
     }
 
     if (sock_failed) throw runtime_error("sock close failed");
@@ -153,14 +179,18 @@ class TelnetServer {
 
   void start(volatile sig_atomic_t* keep_running, function<void(u8)> notify) {
     try {
-      accept_new_connection();
+      bool connection_open = false;
       while (*keep_running) {
+        while (*keep_running && !connection_open && !accept_new_connection()) {
+          // try to get a connection
+        }
+        connection_open = true;
         try {
           const auto& [in, read_succeeded] = read_input();
           if (read_succeeded) notify(in);
         } catch (...) {
-          accept_new_connection();
-        }
+          connection_open = false;
+        };
       }
     } catch (exception& e) {
       cerr << "telnet start failed:" << endl;

@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
     Model model(cmd.tcp_port, cmd.proxy_host, cmd.proxy_port, &keep_running);
     model.init();
     model.start();
-
+    model.clean_up();
     keep_running = 0;
     return 0;
   } catch (exception& e) {

@@ -32,6 +32,13 @@ class Model {
     telnet = make_shared<TelnetServer>(telnet_port);
   }
 
+  ~Model() {
+    try {
+      clean_up();
+    } catch (...) {
+    }
+  }
+
   void init() {
     telnet->init();
     auto telnet_loop = [this]() {
@@ -40,7 +47,13 @@ class Model {
     telnet_ft = async(launch::async, telnet_loop);
   }
 
-  void clean_up() { telnet_ft.get(); }
+  void clean_up() {
+    try {
+      telnet->clean_up();
+    } catch (...) {
+    }
+    telnet_ft.get();
+  }
 
   void notify(shared_ptr<Event> event) {
     lock_guard<mutex> lock(lock_mutex);
