@@ -19,7 +19,7 @@
 
 using namespace std;
 
-class TelnetClient {
+class TelnetServer {
   u16 port;
 
   conn_t sock;
@@ -79,12 +79,12 @@ class TelnetClient {
   }
 
  public:
-  TelnetClient(u16 port) : port(port) {
+  TelnetServer(u16 port) : port(port) {
     sock = -1;
     client_sock = -1;
   }
 
-  ~TelnetClient() {
+  ~TelnetServer() {
     try {
       clean_up();
     } catch (...) {

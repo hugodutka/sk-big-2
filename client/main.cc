@@ -43,12 +43,12 @@ int main(int argc, char** argv) {
       return 1;
     }
 
-    TelnetClient telnet_client(cmd.tcp_port);
-    telnet_client.init();
-    telnet_client.accept_new_connection();
-    telnet_client.render("count: 0\r\n", 1);
+    TelnetServer telnet_server(cmd.tcp_port);
+    telnet_server.init();
+    telnet_server.accept_new_connection();
+    telnet_server.render("count: 0\r\n", 1);
     while (keep_running) {
-      u8 input = telnet_client.read_input();
+      u8 input = telnet_server.read_input();
       printf("%d\r\n", input);
     }
 
