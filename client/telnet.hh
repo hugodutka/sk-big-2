@@ -1,8 +1,11 @@
 #ifndef TELNET_HH
 #define TELNET_HH
 
+#include <fcntl.h>
 #include <netdb.h>
+#include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -16,6 +19,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include "types.hh"
 
 using namespace std;
@@ -33,7 +37,7 @@ class TelnetServer {
     if (sock >= 0) close(sock);
     sock = socket(PF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
-      throw std::runtime_error("socket failed");
+      throw runtime_error("socket failed");
     }
     sockaddr_in server_address;
     server_address.sin_family = AF_INET;
@@ -41,7 +45,7 @@ class TelnetServer {
     server_address.sin_port = htons(port);
 
     if (bind(sock, (sockaddr*)&server_address, sizeof(server_address)) < 0) {
-      throw std::runtime_error("bind failed");
+      throw runtime_error("bind failed");
     }
   }
 
@@ -114,7 +118,7 @@ class TelnetServer {
     if (client_sock >= 0) close(client_sock);
 
     if (listen(sock, 1) < 0) {
-      throw std::runtime_error("listen failed");
+      throw runtime_error("listen failed");
     }
     client_address_len = sizeof(client_address);
     client_sock = accept(sock, (struct sockaddr*)&client_address, &client_address_len);
@@ -125,21 +129,46 @@ class TelnetServer {
     set_display_options();
   }
 
-  u8 read_input() {
+  tuple<u8, bool> read_input() {
     u8 input;
-    if (read(client_sock, &input, 1) != 1) throw runtime_error("read failed");
-    return input;
+    fd_set set;
+    timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 100000;  // 100 ms
+
+    FD_ZERO(&set);
+    FD_SET(client_sock, &set);
+
+    int status = select(client_sock + 1, &set, NULL, NULL, &timeout);
+    if (status == -1) {
+      throw runtime_error("select failed");
+    } else if (status == 0) {
+      // timeout occured
+      return {0, false};
+    } else {
+      if (read(client_sock, &input, 1) != 1) throw runtime_error("read failed");
+      return {input, true};
+    }
   }
 
   void start(volatile sig_atomic_t* keep_running, function<void(u8)> notify) {
-    accept_new_connection();
-    while (*keep_running) {
-      try {
-        u8 in = read_input();
-        notify(in);
-      } catch (...) {
-        accept_new_connection();
+    try {
+      accept_new_connection();
+      while (*keep_running) {
+        try {
+          const auto& [in, read_succeeded] = read_input();
+          if (read_succeeded) notify(in);
+        } catch (...) {
+          accept_new_connection();
+        }
       }
+    } catch (exception& e) {
+      cerr << "telnet start failed:" << endl;
+      cerr << e.what() << endl;
+      throw;
+    } catch (...) {
+      cerr << "telnet start failed for an unknown reason" << endl;
+      throw;
     }
   }
 
