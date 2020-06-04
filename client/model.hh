@@ -22,11 +22,13 @@ class Model {
   queue<shared_ptr<Event>> event_queue;
   mutex lock_mutex;
   condition_variable cv;
-  sig_atomic_t* keep_running;
+  volatile sig_atomic_t* keep_running;
   future<void> telnet_ft;
 
  public:
-  Model(u16 telnet_port, const string& proxy_host, u16 proxy_port) {
+  Model(u16 telnet_port, const string& proxy_host, u16 proxy_port,
+        volatile sig_atomic_t* keep_running)
+      : keep_running(keep_running) {
     telnet = make_shared<TelnetServer>(telnet_port);
   }
 

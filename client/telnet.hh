@@ -131,7 +131,7 @@ class TelnetServer {
     return input;
   }
 
-  void start(sig_atomic_t* keep_running, function<void(u8)> notify) {
+  void start(volatile sig_atomic_t* keep_running, function<void(u8)> notify) {
     accept_new_connection();
     while (*keep_running) {
       try {
