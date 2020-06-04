@@ -1,6 +1,7 @@
 #ifndef MODEL_HH
 #define MODEL_HH
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -10,7 +11,9 @@
 #include <mutex>
 #include <queue>
 #include "events.hh"
+#include "proxy.hh"
 #include "telnet.hh"
+#include "ui.hh"
 
 using namespace std;
 using namespace chrono_literals;
@@ -25,11 +28,17 @@ class Model {
   volatile sig_atomic_t* keep_running;
   future<void> telnet_ft;
 
+  int cursor_line;
+  vector<ProxyInfo> proxies;
+
  public:
   Model(u16 telnet_port, const string& proxy_host, u16 proxy_port,
         volatile sig_atomic_t* keep_running)
       : keep_running(keep_running) {
     telnet = make_shared<TelnetServer>(telnet_port);
+    cursor_line = 0;
+    proxies.push_back(ProxyInfo("Dobreradio", "Sanah - Krolowa dram", 14, true));
+    proxies.push_back(ProxyInfo("Zlote przeboje", "Philter - Blue eyes", 15, false));
   }
 
   ~Model() {
@@ -67,18 +76,31 @@ class Model {
       input_buf.pop_back();
     }
     auto& in = input_buf;
-    if (in.size() >= 3 && in[0] == 65 && in[1] == 91 && in[2] == 27) {
-      // up arrow
-      cerr << "up arrow" << endl;
-    } else if (in.size() >= 3 && in[0] == 66 && in[1] == 91 && in[2] == 27) {
-      // down arrow
-      cerr << "down arrow" << endl;
-    } else if (in.size() >= 2 && in[0] == 0 && in[1] == 13) {
-      // enter
-      cerr << "enter" << endl;
+    int num_options = 2 + proxies.size();
+    if (in.size() >= 3 && in[0] == 65 && in[1] == 91 && in[2] == 27) {  // up arrow
+      cursor_line = cursor_line - 1;
+    } else if (in.size() >= 3 && in[0] == 66 && in[1] == 91 && in[2] == 27) {  // down arrow
+      cursor_line = cursor_line + 1;
+    } else if (in.size() >= 2 && in[0] == 0 && in[1] == 13) {  // enter
+      if (cursor_line == 1) {
+        cerr << "szukaj pośrednika" << endl;
+      } else if (cursor_line == num_options) {
+        *keep_running = 0;
+      } else {
+        int proxy_index = cursor_line - 2;
+        auto& proxy_info = proxies[proxy_index];
+        for (auto& proxy : proxies) {
+          proxy.active = false;
+        }
+        proxy_info.active = true;
+      }
     } else {
       // unrecognized input, do nothing
     }
+    cursor_line = max(1, cursor_line);
+    cursor_line = min(num_options, cursor_line);
+    string ui = generate_ui(proxies);
+    telnet->render(ui, cursor_line);
   }
 
   void react(EventProxyDiscovered* event) {
