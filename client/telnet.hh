@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <regex>
@@ -110,6 +111,8 @@ class TelnetServer {
   }
 
   void accept_new_connection() {
+    if (client_sock >= 0) close(client_sock);
+
     if (listen(sock, 1) < 0) {
       throw std::runtime_error("listen failed");
     }
@@ -126,6 +129,18 @@ class TelnetServer {
     u8 input;
     if (read(client_sock, &input, 1) != 1) throw runtime_error("read failed");
     return input;
+  }
+
+  void start(sig_atomic_t* keep_running, function<void(u8)> notify) {
+    accept_new_connection();
+    while (*keep_running) {
+      try {
+        u8 in = read_input();
+        notify(in);
+      } catch (...) {
+        accept_new_connection();
+      }
+    }
   }
 
   void render(const string& text, u32 cursor_pos) {

@@ -7,6 +7,8 @@
 #include <string>
 #include <thread>
 #include "cmd.hh"
+#include "events.hh"
+#include "model.hh"
 #include "telnet.hh"
 
 using namespace std;
@@ -42,15 +44,9 @@ int main(int argc, char** argv) {
       cerr << "Usage: " << argv[0] << " -H host -P port -p port [-T timeout]" << endl;
       return 1;
     }
-
-    TelnetServer telnet_server(cmd.tcp_port);
-    telnet_server.init();
-    telnet_server.accept_new_connection();
-    telnet_server.render("count: 0\r\n", 1);
-    while (keep_running) {
-      u8 input = telnet_server.read_input();
-      printf("%d\r\n", input);
-    }
+    Model model(cmd.tcp_port, cmd.proxy_host, cmd.proxy_port);
+    model.init();
+    model.start();
 
     keep_running = 0;
     return 0;
