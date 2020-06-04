@@ -83,37 +83,6 @@ class TelnetServer {
     send_msg((u8*)(command.c_str()), command.size());
   }
 
- public:
-  TelnetServer(u16 port) : port(port) {
-    sock = -1;
-    client_sock = -1;
-  }
-
-  ~TelnetServer() {
-    try {
-      clean_up();
-    } catch (...) {
-      // ignore errors in destructor
-    }
-  }
-
-  void init() { setup_connection(); }
-
-  void clean_up() {
-    bool sock_failed = false;
-    bool client_sock_failed = false;
-
-    if (sock >= 0) {
-      sock_failed = close(sock) != 0;
-    }
-    if (client_sock >= 0) {
-      client_sock_failed = close(sock) != 0;
-    }
-
-    if (sock_failed) throw runtime_error("sock close failed");
-    if (client_sock_failed) throw runtime_error("client sock close failed");
-  }
-
   void accept_new_connection() {
     if (client_sock >= 0) close(client_sock);
 
@@ -149,6 +118,37 @@ class TelnetServer {
       if (read(client_sock, &input, 1) != 1) throw runtime_error("read failed");
       return {input, true};
     }
+  }
+
+ public:
+  TelnetServer(u16 port) : port(port) {
+    sock = -1;
+    client_sock = -1;
+  }
+
+  ~TelnetServer() {
+    try {
+      clean_up();
+    } catch (...) {
+      // ignore errors in destructor
+    }
+  }
+
+  void init() { setup_connection(); }
+
+  void clean_up() {
+    bool sock_failed = false;
+    bool client_sock_failed = false;
+
+    if (sock >= 0) {
+      sock_failed = close(sock) != 0;
+    }
+    if (client_sock >= 0) {
+      client_sock_failed = close(sock) != 0;
+    }
+
+    if (sock_failed) throw runtime_error("sock close failed");
+    if (client_sock_failed) throw runtime_error("client sock close failed");
   }
 
   void start(volatile sig_atomic_t* keep_running, function<void(u8)> notify) {
