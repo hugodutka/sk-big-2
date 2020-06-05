@@ -268,7 +268,7 @@ class UDPBroadcaster : public Broadcaster {
   virtual void broadcast(const ICYPart& part, const u8* data) override {
     lock_guard<mutex> lock_g(lock);
     send_to_clients(AUDIO, data, part.size);
-    if (part.meta_present) {
+    if (part.meta_present && part.meta.size() > 0) {
       send_to_clients(METADATA, (u8*)(part.meta.c_str()), part.meta.length());
     }
     if (udp_server_crashed) rethrow_exception(udp_server_exception);
