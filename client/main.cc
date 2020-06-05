@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
     } catch (exception& e) {
       cerr << "Failed to parse command line arguments. Reason: " << e.what() << endl << endl;
       cerr << "Usage: " << argv[0] << " -H host -P port -p port [-T timeout]" << endl;
+      keep_running = 0;
       return 1;
     }
     Model model(cmd.tcp_port, cmd.proxy_host, cmd.proxy_port, cmd.timeout, &keep_running);

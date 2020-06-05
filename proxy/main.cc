@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
       cerr << "Failed to parse command line arguments. Reason: " << e.what() << endl;
       cerr << "Usage: " << argv[0] << " -h host -r resource -p port [-m yes|no] [-t timeout]"
            << " [-P port] [-B multi] [-T timeout]" << endl;
+      keep_running = 0;
       return 1;
     }
 
