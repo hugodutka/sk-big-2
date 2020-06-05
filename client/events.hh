@@ -16,9 +16,33 @@ struct EventUserInput : public Event {
   EventUserInput(u8 input) : input(input) {}
 };
 
-struct EventProxiesChanged : public Event {
-  shared_ptr<vector<ProxyInfo>> proxies;
-  EventProxiesChanged(shared_ptr<vector<ProxyInfo>> proxies) : proxies(proxies) {}
+struct EventIamSent : public Event {
+  u64 sender_id;
+  i64 timestamp;
+  shared_ptr<string> iam;
+  EventIamSent(u64 sender_id, i64 timestamp, const string& iam_str)
+      : sender_id(sender_id), timestamp(timestamp) {
+    iam = make_shared<string>(iam_str);
+  }
+};
+
+struct EventAudioSent : public Event {
+  u64 sender_id;
+  i64 timestamp;
+  shared_ptr<u8[]> audio;
+  size_t length;
+  EventAudioSent(u64 sender_id, i64 timestamp, shared_ptr<u8[]> audio, size_t length)
+      : sender_id(sender_id), timestamp(timestamp), audio(audio), length(length) {}
+};
+
+struct EventMetaSent : public Event {
+  u64 sender_id;
+  i64 timestamp;
+  shared_ptr<string> meta;
+  EventMetaSent(u64 sender_id, i64 timestamp, const string& meta_str)
+      : sender_id(sender_id), timestamp(timestamp) {
+    meta = make_shared<string>(meta_str);
+  }
 };
 
 struct EventProxyManagerCrashed : public Event {

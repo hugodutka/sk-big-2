@@ -16,8 +16,8 @@
 #include <string>
 #include <unordered_map>
 #include "events.hh"
-#include "proxyinfo.hh"
 #include "types.hh"
+#include "utils.hh"
 
 using namespace std;
 
@@ -34,7 +34,6 @@ class ProxyManager {
  private:
   string host;
   u16 port;
-  u32 timeout;
 
   conn_t sock;
   sockaddr_in my_address;
@@ -45,22 +44,7 @@ class ProxyManager {
   u8 msg_buf[msg_buf_size];
   ssize_t msg_len;
 
-  unordered_map<u64, shared_ptr<ProxyInfo>> proxies;
-
   function<void(shared_ptr<Event>)> notify;
-
-  u64 hash_sockaddr_in(const sockaddr_in& addr) {
-    u64 port = static_cast<u64>(addr.sin_port);
-    u64 ip = static_cast<u64>(addr.sin_addr.s_addr);
-    return (ip << 32) + port;
-  }
-
-  // Returns the current time in milliseconds.
-  i64 now() {
-    return chrono::duration_cast<chrono::milliseconds>(
-               chrono::system_clock::now().time_since_epoch())
-        .count();
-  }
 
   // Tries to read a message from sock into msg_buf. Saves the address of the sender in msg_sender.
   // Returns true if a message was read, false otherwise.
@@ -102,64 +86,20 @@ class ProxyManager {
     u16 msg_content_len = ntohs(((u16*)(&msg_buf))[1]);
     u8* msg_content = msg_buf + HEADER_SIZE;
 
-    u64 sender_id = hash_sockaddr_in(msg_sender);
-    auto sender = proxies.find(sender_id);
-    bool is_sender_tracked = sender != proxies.end();
     i64 current_time = now();
-    bool proxies_changed = false;
+    u64 sender_id = hash_sockaddr_in(msg_sender);
 
     if (msg_type == IAM) {
-      string radio_info = string((char*)(msg_content));
-      if (is_sender_tracked) {
-        sender->second->info = radio_info;
-      } else {
-        proxies[sender_id] = make_shared<ProxyInfo>(radio_info, "", sender_id, current_time, false);
-      }
-      proxies_changed = true;
+      notify(make_shared<EventIamSent>(sender_id, current_time, string((char*)(msg_content))));
     } else if (msg_type == AUDIO) {
-      if (is_sender_tracked && sender->second->active) {
-        for (u64 i = 0; i < msg_content_len; i++) {
-          cout << msg_content[i];
-        }
-      }
+      auto audio = shared_ptr<u8[]>(new u8[msg_content_len]);
+      memcpy(audio.get(), msg_content, msg_content_len);
+      notify(make_shared<EventAudioSent>(sender_id, current_time, audio, msg_content_len));
     } else if (msg_type == METADATA) {
-      if (is_sender_tracked) {
-        sender->second->meta = string((char*)(msg_content));
-        proxies_changed = true;
-      }
+      notify(make_shared<EventMetaSent>(sender_id, current_time, string((char*)(msg_content))));
     } else {
       throw runtime_error("unexpected message type: " + to_string(msg_type));
     }
-
-    if (is_sender_tracked) {
-      sender->second->last_contact = current_time;
-    }
-
-    if (proxies_changed) {
-      notify_that_proxies_changed();
-    }
-  }
-
-  void remove_inactive_proxies() {
-    i64 disconnect_after_ms = timeout * 1000;
-    i64 current_time = now();
-    auto it = proxies.begin();
-    while (it != proxies.end()) {
-      if (current_time - it->second->last_contact > disconnect_after_ms) {
-        it = proxies.erase(it);
-      } else {
-        it++;
-      }
-    }
-  }
-
-  void notify_that_proxies_changed() {
-    auto proxies_copy = make_shared<vector<ProxyInfo>>();
-    for (auto& proxy : proxies) {
-      proxies_copy->push_back(*(proxy.second));
-    }
-    sort(proxies_copy->begin(), proxies_copy->end(), [](auto& a, auto& b) { return a.id < b.id; });
-    notify(make_shared<EventProxiesChanged>(proxies_copy));
   }
 
   void init_my_address() {
@@ -210,8 +150,10 @@ class ProxyManager {
   }
 
  public:
-  ProxyManager(const string& host, u16 port, u32 timeout, function<void(shared_ptr<Event>)> notify)
-      : host(host), port(port), timeout(timeout), notify(notify) {}
+  ProxyManager(const string& host, u16 port, function<void(shared_ptr<Event>)> notify)
+      : host(host), port(port), notify(notify) {
+    memset(&msg_buf, 0, msg_buf_size);
+  }
 
   void init() {
     init_my_address();
