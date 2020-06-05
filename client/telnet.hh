@@ -195,12 +195,9 @@ class TelnetServer {
           connection_open = false;
         };
       }
-    } catch (exception& e) {
-      cerr << "telnet start failed:" << endl;
-      cerr << e.what() << endl;
-      throw;
     } catch (...) {
-      cerr << "telnet start failed for an unknown reason" << endl;
+      auto event = make_shared<EventTelnetServerCrashed>(current_exception());
+      notify(event);
       throw;
     }
   }

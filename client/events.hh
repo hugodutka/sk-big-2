@@ -57,4 +57,9 @@ struct EventProxyClientCrashed : public Event {
   EventProxyClientCrashed(exception_ptr exc) : exc(exc) {}
 };
 
+struct EventTelnetServerCrashed : public Event {
+  exception_ptr exc;
+  EventTelnetServerCrashed(exception_ptr exc) : exc(exc) {}
+};
+
 #endif

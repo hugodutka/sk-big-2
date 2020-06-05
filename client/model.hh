@@ -174,6 +174,12 @@ class Model {
     return false;
   }
 
+  bool react(EventTelnetServerCrashed* event) {
+    *keep_running = 0;
+    rethrow_exception(event->exc);
+    return false;
+  }
+
   bool remove_inactive_proxies() {
     i64 disconnect_after_ms = proxy_timeout * 1000;
     i64 current_time = now();
@@ -226,6 +232,8 @@ class Model {
     } else if (auto ev = dynamic_cast<EventMetaSent*>(event.get())) {
       should_render = react(ev);
     } else if (auto ev = dynamic_cast<EventProxyClientCrashed*>(event.get())) {
+      should_render = react(ev);
+    } else if (auto ev = dynamic_cast<EventTelnetServerCrashed*>(event.get())) {
       should_render = react(ev);
     };
     if (should_render) render();
