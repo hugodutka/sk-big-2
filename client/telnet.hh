@@ -3,13 +3,14 @@
 
 #include <fcntl.h>
 #include <netdb.h>
-#include <sys/select.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <exception>
 #include <functional>
@@ -93,17 +94,14 @@ class TelnetServer {
       throw runtime_error("listen failed");
     }
 
-    fd_set set;
-    timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 100000;  // 100 ms
+    pollfd fds[1];
+    fds[0].fd = sock;
+    fds[0].events = POLLIN;
+    fds[0].revents = 0;
 
-    FD_ZERO(&set);
-    FD_SET(sock, &set);
-
-    int status = select(sock + 1, &set, NULL, NULL, &timeout);
+    int status = poll(fds, 1, 100);
     if (status == -1) {
-      throw runtime_error("select failed");
+      throw runtime_error("poll failed");
     } else if (status == 0) {
       // timeout occured
       return false;
@@ -121,17 +119,14 @@ class TelnetServer {
 
   tuple<u8, bool> read_input() {
     u8 input;
-    fd_set set;
-    timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 100000;  // 100 ms
+    pollfd fds[1];
+    fds[0].fd = client_sock;
+    fds[0].events = POLLIN;
+    fds[0].revents = 0;
 
-    FD_ZERO(&set);
-    FD_SET(client_sock, &set);
-
-    int status = select(client_sock + 1, &set, NULL, NULL, &timeout);
+    int status = poll(fds, 1, 100);
     if (status == -1) {
-      throw runtime_error("select failed");
+      throw runtime_error("poll failed");
     } else if (status == 0) {
       // timeout occured
       return {0, false};
@@ -180,7 +175,7 @@ class TelnetServer {
     if (client_sock_failed) throw runtime_error("client sock close failed");
   }
 
-  void start(volatile sig_atomic_t* keep_running) {
+  void start(atomic<bool>* keep_running) {
     try {
       bool connection_open = false;
       while (*keep_running) {

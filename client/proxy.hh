@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <functional>
@@ -175,7 +176,7 @@ class ProxyClient {
     send_msg((sockaddr*)(&addr), KEEPALIVE, nullptr, 0);
   }
 
-  void start(volatile sig_atomic_t* keep_running) {
+  void start(atomic<bool>* keep_running) {
     try {
       while (*keep_running) {
         if (receive_msg()) {

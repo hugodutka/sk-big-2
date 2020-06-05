@@ -1,3 +1,4 @@
+#include <atomic>
 #include <csignal>
 #include <ctime>
 #include <exception>
@@ -14,7 +15,7 @@
 
 using namespace std;
 
-volatile sig_atomic_t keep_running = 1;
+atomic<bool> keep_running = 1;
 
 int main(int argc, char** argv) {
   sigset_t sigset;

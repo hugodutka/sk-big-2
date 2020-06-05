@@ -31,7 +31,7 @@ class Model {
   queue<shared_ptr<Event>> event_queue;
   mutex lock_mutex;
   condition_variable cv;
-  volatile sig_atomic_t* keep_running;
+  atomic<bool>* keep_running;
   future<void> telnet_ft;
   future<void> proxy_client_ft;
 
@@ -52,7 +52,7 @@ class Model {
 
  public:
   Model(u16 telnet_port, const string& proxy_host, u16 proxy_port, u32 proxy_timeout,
-        volatile sig_atomic_t* keep_running)
+        atomic<bool>* keep_running)
       : proxy_timeout(proxy_timeout), keep_running(keep_running) {
     auto f_notify = [this](auto e) { notify(e); };
 
@@ -81,11 +81,7 @@ class Model {
   }
 
   void clean_up() {
-    try {
-      telnet->clean_up();
-      proxy_client->clean_up();
-    } catch (...) {
-    }
+    *keep_running = 0;
     telnet_ft.get();
     proxy_client_ft.get();
   }
