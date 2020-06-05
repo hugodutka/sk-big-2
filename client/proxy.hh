@@ -30,7 +30,7 @@ constexpr u16 METADATA = 6;
 
 constexpr size_t HEADER_SIZE = 4;
 
-class ProxyManager {
+class ProxyClient {
  private:
   string host;
   u16 port;
@@ -154,7 +154,7 @@ class ProxyManager {
   }
 
  public:
-  ProxyManager(const string& host, u16 port, function<void(shared_ptr<Event>)> notify)
+  ProxyClient(const string& host, u16 port, function<void(shared_ptr<Event>)> notify)
       : host(host), port(port), notify(notify) {
     memset(&msg_buf, 0, msg_buf_size);
   }
@@ -188,7 +188,7 @@ class ProxyManager {
         }
       }
     } catch (...) {
-      auto event = make_shared<EventProxyManagerCrashed>(current_exception());
+      auto event = make_shared<EventProxyClientCrashed>(current_exception());
       notify(event);
       throw;
     }

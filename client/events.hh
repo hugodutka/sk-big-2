@@ -52,9 +52,9 @@ struct EventMetaSent : public Event {
   }
 };
 
-struct EventProxyManagerCrashed : public Event {
+struct EventProxyClientCrashed : public Event {
   exception_ptr exc;
-  EventProxyManagerCrashed(exception_ptr exc) : exc(exc) {}
+  EventProxyClientCrashed(exception_ptr exc) : exc(exc) {}
 };
 
 #endif

@@ -26,14 +26,14 @@ class Model {
   u32 proxy_timeout;
 
   shared_ptr<TelnetServer> telnet;
-  shared_ptr<ProxyManager> proxy_manager;
+  shared_ptr<ProxyClient> proxy_client;
   deque<u8> input_buf;
   queue<shared_ptr<Event>> event_queue;
   mutex lock_mutex;
   condition_variable cv;
   volatile sig_atomic_t* keep_running;
   future<void> telnet_ft;
-  future<void> proxy_manager_ft;
+  future<void> proxy_client_ft;
 
   int cursor_line;
   unordered_map<u64, shared_ptr<ProxyInfo>> proxies;
@@ -57,7 +57,7 @@ class Model {
     auto f_notify = [this](auto e) { notify(e); };
 
     telnet = make_shared<TelnetServer>(telnet_port, f_notify);
-    proxy_manager = make_shared<ProxyManager>(proxy_host, proxy_port, f_notify);
+    proxy_client = make_shared<ProxyClient>(proxy_host, proxy_port, f_notify);
     last_keepalive = now();
     cursor_line = 1;
   }
@@ -71,23 +71,23 @@ class Model {
 
   void init() {
     telnet->init();
-    proxy_manager->init();
+    proxy_client->init();
 
     auto telnet_loop = [this]() { telnet->start(keep_running); };
     telnet_ft = async(launch::async, telnet_loop);
 
-    auto proxy_manager_loop = [this]() { proxy_manager->start(keep_running); };
-    proxy_manager_ft = async(launch::async, proxy_manager_loop);
+    auto proxy_client_loop = [this]() { proxy_client->start(keep_running); };
+    proxy_client_ft = async(launch::async, proxy_client_loop);
   }
 
   void clean_up() {
     try {
       telnet->clean_up();
-      proxy_manager->clean_up();
+      proxy_client->clean_up();
     } catch (...) {
     }
     telnet_ft.get();
-    proxy_manager_ft.get();
+    proxy_client_ft.get();
   }
 
   void notify(shared_ptr<Event> event) {
@@ -109,7 +109,7 @@ class Model {
       cursor_line = cursor_line + 1;
     } else if (in.size() >= 2 && in[0] == 0 && in[1] == 13) {  // enter
       if (cursor_line == 1) {
-        proxy_manager->discover_proxies();
+        proxy_client->discover_proxies();
       } else if (cursor_line == num_options) {
         *keep_running = 0;
       } else {
@@ -168,7 +168,7 @@ class Model {
     return false;
   }
 
-  bool react(EventProxyManagerCrashed* event) {
+  bool react(EventProxyClientCrashed* event) {
     *keep_running = 0;
     rethrow_exception(event->exc);
     return false;
@@ -195,7 +195,7 @@ class Model {
     if (current_time - last_keepalive >= 3500) {
       for (auto& pair : proxies) {
         auto proxy = pair.second;
-        proxy_manager->send_keepalive(proxy->addr);
+        proxy_client->send_keepalive(proxy->addr);
       }
       last_keepalive = current_time;
     }
@@ -225,7 +225,7 @@ class Model {
       should_render = react(ev);
     } else if (auto ev = dynamic_cast<EventMetaSent*>(event.get())) {
       should_render = react(ev);
-    } else if (auto ev = dynamic_cast<EventProxyManagerCrashed*>(event.get())) {
+    } else if (auto ev = dynamic_cast<EventProxyClientCrashed*>(event.get())) {
       should_render = react(ev);
     };
     if (should_render) render();
