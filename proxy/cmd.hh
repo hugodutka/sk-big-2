@@ -69,7 +69,7 @@ struct CmdArgs {
         if (udp_port_set) throw runtime_error("duplicate udp port flag");
         udp_port_set = true;
         udp_port = stoul(value);
-        if (udp_port > MAX_PORT) throw runtime_error("udp port too high");
+        if (static_cast<u32>(udp_port) > MAX_PORT) throw runtime_error("udp port too high");
       } else if (flag == "-B") {
         if (multi_set) throw runtime_error("duplicate multi flag");
         multi_set = true;

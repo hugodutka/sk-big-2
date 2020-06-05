@@ -81,7 +81,7 @@ class ProxyClient {
 
   // Processes a message that is in msg_buf.
   void process_msg() {
-    if (msg_len < HEADER_SIZE) throw runtime_error("invalid message");
+    if (msg_len < static_cast<ssize_t>(HEADER_SIZE)) throw runtime_error("invalid message");
     u16 msg_type = ntohs(((u16*)(&msg_buf))[0]);
     u16 msg_content_len = ntohs(((u16*)(&msg_buf))[1]);
     u8* msg_content = msg_buf + HEADER_SIZE;

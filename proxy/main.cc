@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
     try {
       cmd.parse(argc, argv);
     } catch (exception& e) {
-      cerr << "Failed to parse command line arguments. Reason: " << e.what() << endl;
+      cerr << "Failed to parse command line arguments. Reason: " << e.what() << endl << endl;
       cerr << "Usage: " << argv[0] << " -h host -r resource -p port [-m yes|no] [-t timeout]"
            << " [-P port] [-B multi] [-T timeout]" << endl;
       keep_running = 0;
