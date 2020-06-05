@@ -55,12 +55,10 @@ class Model {
       : proxy_timeout(proxy_timeout), keep_running(keep_running) {
     auto f_notify = [this](auto e) { notify(e); };
 
-    telnet = make_shared<TelnetServer>(telnet_port);
+    telnet = make_shared<TelnetServer>(telnet_port, f_notify);
     proxy_manager = make_shared<ProxyManager>(proxy_host, proxy_port, f_notify);
 
     cursor_line = 1;
-    proxies[1] = make_shared<ProxyInfo>("Dobreradio", "Sanah - Krolowa dram", 1, now(), true);
-    proxies[2] = make_shared<ProxyInfo>("Zlote przeboje", "Philter - Blue eyes", 2, now(), false);
   }
 
   ~Model() {
@@ -74,10 +72,9 @@ class Model {
     telnet->init();
     proxy_manager->init();
 
-    auto telnet_loop = [this]() {
-      telnet->start(keep_running, [this](u8 in) { notify(make_shared<EventUserInput>(in)); });
-    };
+    auto telnet_loop = [this]() { telnet->start(keep_running); };
     telnet_ft = async(launch::async, telnet_loop);
+
     auto proxy_manager_loop = [this]() { proxy_manager->start(keep_running); };
     proxy_manager_ft = async(launch::async, proxy_manager_loop);
   }

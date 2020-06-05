@@ -90,13 +90,17 @@ class ProxyManager {
     u64 sender_id = hash_sockaddr_in(msg_sender);
 
     if (msg_type == IAM) {
-      notify(make_shared<EventIamSent>(sender_id, current_time, string((char*)(msg_content))));
+      char* msg = (char*)(msg_content);
+      msg[msg_content_len] = '\0';
+      notify(make_shared<EventIamSent>(sender_id, current_time, string(msg)));
     } else if (msg_type == AUDIO) {
       auto audio = shared_ptr<u8[]>(new u8[msg_content_len]);
       memcpy(audio.get(), msg_content, msg_content_len);
       notify(make_shared<EventAudioSent>(sender_id, current_time, audio, msg_content_len));
     } else if (msg_type == METADATA) {
-      notify(make_shared<EventMetaSent>(sender_id, current_time, string((char*)(msg_content))));
+      char* msg = (char*)(msg_content);
+      msg[msg_content_len] = '\0';
+      notify(make_shared<EventMetaSent>(sender_id, current_time, string(msg)));
     } else {
       throw runtime_error("unexpected message type: " + to_string(msg_type));
     }
@@ -171,7 +175,6 @@ class ProxyManager {
     try {
       while (*keep_running) {
         if (receive_msg()) {
-          cerr << "got a message!" << endl;
           try {
             process_msg();
           } catch (exception& e) {

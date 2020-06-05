@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <string>
 #include <tuple>
+#include "events.hh"
 #include "types.hh"
 
 using namespace std;
@@ -31,6 +32,8 @@ class TelnetServer {
   sockaddr_in client_address;
   socklen_t client_address_len;
   conn_t client_sock;
+
+  function<void(shared_ptr<Event>)> notify;
 
  private:
   void setup_connection() {
@@ -139,7 +142,7 @@ class TelnetServer {
   }
 
  public:
-  TelnetServer(u16 port) : port(port) {
+  TelnetServer(u16 port, function<void(shared_ptr<Event>)> notify) : port(port), notify(notify) {
     sock = -1;
     client_sock = -1;
   }
@@ -177,7 +180,7 @@ class TelnetServer {
     if (client_sock_failed) throw runtime_error("client sock close failed");
   }
 
-  void start(volatile sig_atomic_t* keep_running, function<void(u8)> notify) {
+  void start(volatile sig_atomic_t* keep_running) {
     try {
       bool connection_open = false;
       while (*keep_running) {
@@ -187,7 +190,7 @@ class TelnetServer {
         connection_open = true;
         try {
           const auto& [in, read_succeeded] = read_input();
-          if (read_succeeded) notify(in);
+          if (read_succeeded) notify(make_shared<EventUserInput>(in));
         } catch (...) {
           connection_open = false;
         };
