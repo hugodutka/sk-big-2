@@ -1,6 +1,11 @@
 #ifndef EVENTS_HH
 #define EVENTS_HH
 
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -19,10 +24,12 @@ struct EventUserInput : public Event {
 struct EventIamSent : public Event {
   u64 sender_id;
   i64 timestamp;
+  shared_ptr<sockaddr_in> sender;
   shared_ptr<string> iam;
-  EventIamSent(u64 sender_id, i64 timestamp, const string& iam_str)
+  EventIamSent(u64 sender_id, i64 timestamp, const sockaddr_in& sender_ref, const string& iam_str)
       : sender_id(sender_id), timestamp(timestamp) {
     iam = make_shared<string>(iam_str);
+    sender = make_shared<sockaddr_in>(sender_ref);
   }
 };
 

@@ -37,6 +37,7 @@ class Model {
 
   int cursor_line;
   unordered_map<u64, shared_ptr<ProxyInfo>> proxies;
+  i64 last_keepalive;
 
   int get_num_menu_options() { return 2 + proxies.size(); }
 
@@ -57,7 +58,7 @@ class Model {
 
     telnet = make_shared<TelnetServer>(telnet_port, f_notify);
     proxy_manager = make_shared<ProxyManager>(proxy_host, proxy_port, f_notify);
-
+    last_keepalive = now();
     cursor_line = 1;
   }
 
@@ -112,13 +113,14 @@ class Model {
       } else if (cursor_line == num_options) {
         *keep_running = 0;
       } else {
-        for (auto& proxy : proxies) {
-          proxy.second->active = false;
-        }
         int proxy_index = cursor_line - 2;
-        auto ids = get_ordered_proxy_ids();
-        auto selected_proxy_id = ids[proxy_index];
-        proxies[selected_proxy_id]->active = true;
+        auto selected_proxy_id = get_ordered_proxy_ids()[proxy_index];
+        auto selected_proxy = proxies[selected_proxy_id];
+        selected_proxy->active = !selected_proxy->active;
+        for (auto& pair : proxies) {
+          auto proxy = pair.second;
+          if (proxy->id != selected_proxy_id) proxy->active = false;
+        }
       }
     } else {
       // unrecognized input, do nothing
@@ -133,8 +135,8 @@ class Model {
       auto proxy = it->second;
       proxy->info = *(event->iam);
     } else {
-      proxies[sender_id] =
-          make_shared<ProxyInfo>(*(event->iam), "", sender_id, event->timestamp, false);
+      proxies[sender_id] = make_shared<ProxyInfo>(*(event->iam), "", sender_id, event->timestamp,
+                                                  false, *(event->sender));
     }
     proxies[sender_id]->last_contact = event->timestamp;
     return true;
@@ -146,6 +148,7 @@ class Model {
     if (it != proxies.end()) {
       auto proxy = it->second;
       proxy->meta = *(event->meta);
+      proxies[sender_id]->last_contact = event->timestamp;
       return true;
     }
     return false;
@@ -154,9 +157,12 @@ class Model {
   bool react(EventAudioSent* event) {
     auto sender_id = event->sender_id;
     auto it = proxies.find(sender_id);
-    if (it != proxies.end() && it->second->active) {
-      for (size_t i = 0; i < event->length; i++) {
-        cout << event->audio[i];
+    if (it != proxies.end()) {
+      it->second->last_contact = event->timestamp;
+      if (it->second->active) {
+        for (size_t i = 0; i < event->length; i++) {
+          cout << event->audio[i];
+        }
       }
     }
     return false;
@@ -182,6 +188,17 @@ class Model {
       }
     }
     return proxies_were_removed;
+  }
+
+  void send_keepalive() {
+    i64 current_time = now();
+    if (current_time - last_keepalive >= 3500) {
+      for (auto& pair : proxies) {
+        auto proxy = pair.second;
+        proxy_manager->send_keepalive(proxy->addr);
+      }
+      last_keepalive = current_time;
+    }
   }
 
   void render() {
@@ -222,6 +239,7 @@ class Model {
         process_event_from_queue();
       }
       if (remove_inactive_proxies()) render();
+      send_keepalive();
     }
   }
 };

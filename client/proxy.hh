@@ -92,7 +92,7 @@ class ProxyManager {
     if (msg_type == IAM) {
       char* msg = (char*)(msg_content);
       msg[msg_content_len] = '\0';
-      notify(make_shared<EventIamSent>(sender_id, current_time, string(msg)));
+      notify(make_shared<EventIamSent>(sender_id, current_time, msg_sender, string(msg)));
     } else if (msg_type == AUDIO) {
       auto audio = shared_ptr<u8[]>(new u8[msg_content_len]);
       memcpy(audio.get(), msg_content, msg_content_len);
@@ -170,6 +170,10 @@ class ProxyManager {
   }
 
   void discover_proxies() { send_msg((sockaddr*)(&proxy_address), DISCOVER, nullptr, 0); }
+
+  void send_keepalive(const sockaddr_in& addr) {
+    send_msg((sockaddr*)(&addr), KEEPALIVE, nullptr, 0);
+  }
 
   void start(volatile sig_atomic_t* keep_running) {
     try {
