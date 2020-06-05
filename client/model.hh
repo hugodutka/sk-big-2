@@ -122,7 +122,6 @@ class Model {
       }
     } else {
       // unrecognized input, do nothing
-      return false;
     }
     return true;
   }
