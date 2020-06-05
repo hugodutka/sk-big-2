@@ -42,18 +42,17 @@ int main(int argc, char** argv) {
       return 1;
     }
 
+    ICYStream stream = ICYStream(cmd.host, cmd.resource, cmd.port, cmd.timeout, cmd.meta);
+    stream.open_stream();
+
     shared_ptr<Broadcaster> broadcaster;
     if (cmd.udp_port != -1) {
-      string radio_info = cmd.host + ":" + to_string(cmd.port) + cmd.resource;
-      broadcaster =
-          make_shared<UDPBroadcaster>(cmd.udp_port, cmd.multi, radio_info, cmd.udp_timeout);
+      broadcaster = make_shared<UDPBroadcaster>(cmd.udp_port, cmd.multi, stream.get_radio_info(),
+                                                cmd.udp_timeout);
     } else {
       broadcaster = make_shared<StdoutBroadcaster>();
     }
     broadcaster->init();
-
-    ICYStream stream = ICYStream(cmd.host, cmd.resource, cmd.port, cmd.timeout, cmd.meta);
-    stream.open_stream();
 
     size_t buf_size = stream.get_chunk_size();
     shared_ptr<u8[]> buf(new u8[buf_size]);
@@ -72,8 +71,8 @@ int main(int argc, char** argv) {
       }
     }
 
-    stream.close_stream();
     broadcaster->clean_up();
+    stream.close_stream();
     return 0;
   } catch (exception& e) {
     cerr << "An error occurred:" << endl;

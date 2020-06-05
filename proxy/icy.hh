@@ -40,6 +40,7 @@ class ICYStream {
   size_t meta_offset;
   size_t remaining_chunk_size;
   char meta_buf[4096];
+  string radio_info;
 
   string build_request() {
     stringstream req;
@@ -129,6 +130,8 @@ class ICYStream {
                                 regex_constants::ECMAScript | regex_constants::icase);
     static std::regex rg_meta("^icy-metaint:\\s*([0-9]+)\r\n$",
                               regex_constants::ECMAScript | regex_constants::icase);
+    static std::regex rg_name("^icy-name:\\s*(.+)\r\n$",
+                              regex_constants::ECMAScript | regex_constants::icase);
 
     string header = read_header();
     if (!regex_match(header, rg_status)) throw runtime_error("invalid status line");
@@ -140,6 +143,8 @@ class ICYStream {
       if (request_meta && regex_match(header, match_groups, rg_meta)) {
         meta_offset = (size_t)stoul(match_groups[1]);
         meta_found = true;
+      } else if (regex_match(header, match_groups, rg_name)) {
+        radio_info = string(match_groups[1]);
       }
     }
 
@@ -169,6 +174,7 @@ class ICYStream {
     sock = -1;
     remaining_chunk_size = 0;
     meta_offset = 16384;  // default
+    radio_info = host + ":" + to_string(port) + resource;
   }
 
   ~ICYStream() { close_stream(); }
@@ -184,6 +190,8 @@ class ICYStream {
   void close_stream() { close_connection(); }
 
   size_t get_chunk_size() { return meta_offset; }
+
+  string get_radio_info() { return radio_info; }
 
   ICYPart read_chunk(u8* buf) {
     size_t chunk_size = remaining_chunk_size > 0 ? remaining_chunk_size : meta_offset;
