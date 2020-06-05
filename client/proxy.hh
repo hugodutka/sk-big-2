@@ -5,11 +5,18 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <unistd.h>
+#include <algorithm>
 #include <chrono>
+#include <cstring>
+#include <functional>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include "events.hh"
+#include "proxyinfo.hh"
 #include "types.hh"
 
 using namespace std;
@@ -22,17 +29,6 @@ constexpr u16 AUDIO = 4;
 constexpr u16 METADATA = 6;
 
 constexpr size_t HEADER_SIZE = 4;
-
-struct ProxyInfo {
-  string info;
-  string meta;
-  u64 id;
-  i64 last_contact;
-  bool active;
-
-  ProxyInfo(const string& info, const string& meta, u64 id, bool active)
-      : info(info), meta(meta), id(id), active(active) {}
-};
 
 class ProxyManager {
  private:
@@ -50,6 +46,8 @@ class ProxyManager {
   ssize_t msg_len;
 
   unordered_map<u64, shared_ptr<ProxyInfo>> proxies;
+
+  function<void(shared_ptr<Event>)> notify;
 
   u64 hash_sockaddr_in(const sockaddr_in& addr) {
     u64 port = static_cast<u64>(addr.sin_port);
@@ -102,19 +100,44 @@ class ProxyManager {
     u16 msg_type = ntohs(((u16*)(&msg_buf))[0]);
     u16 msg_content_len = ntohs(((u16*)(&msg_buf))[1]);
     if (msg_content_len != 0) throw runtime_error("invalid message length");
+    u8* msg_content = msg_buf + HEADER_SIZE;
 
     u64 sender_id = hash_sockaddr_in(msg_sender);
+    auto sender = proxies.find(sender_id);
+    bool is_sender_tracked = sender != proxies.end();
+    i64 current_time = now();
+    bool proxies_changed = false;
 
     if (msg_type == IAM) {
+      string radio_info = string((char*)(msg_content));
+      if (is_sender_tracked) {
+        sender->second->info = radio_info;
+      } else {
+        proxies[sender_id] = make_shared<ProxyInfo>(radio_info, "", sender_id, current_time, false);
+      }
+      proxies_changed = true;
     } else if (msg_type == AUDIO) {
-      // do nothing
+      if (is_sender_tracked && sender->second->active) {
+        for (u64 i = 0; i < msg_content_len; i++) {
+          cout << msg_content[i];
+        }
+      }
     } else if (msg_type == METADATA) {
-      // do nothing
+      if (is_sender_tracked) {
+        sender->second->meta = string((char*)(msg_content));
+        proxies_changed = true;
+      }
     } else {
       throw runtime_error("unexpected message type: " + to_string(msg_type));
     }
 
-    proxies[sender_id] = make_shared<ProxyInfo>(now(), msg_sender);
+    if (is_sender_tracked) {
+      sender->second->last_contact = current_time;
+    }
+
+    if (proxies_changed) {
+      notify_that_proxies_changed();
+    }
   }
 
   void remove_inactive_proxies() {
@@ -128,6 +151,15 @@ class ProxyManager {
         it++;
       }
     }
+  }
+
+  void notify_that_proxies_changed() {
+    auto proxies_copy = make_shared<vector<ProxyInfo>>();
+    for (auto& proxy : proxies) {
+      proxies_copy->push_back(*(proxy.second));
+    }
+    sort(proxies_copy->begin(), proxies_copy->end(), [](auto& a, auto& b) { return a.id < b.id; });
+    notify(make_shared<EventProxiesChanged>(proxies_copy));
   }
 
   void init_my_address() {
@@ -181,8 +213,8 @@ class ProxyManager {
   }
 
  public:
-  ProxyManager(const string& host, u16 port, u32 timeout)
-      : host(host), port(port), timeout(timeout) {}
+  ProxyManager(const string& host, u16 port, u32 timeout, function<void(shared_ptr<Event>)> notify)
+      : host(host), port(port), timeout(timeout), notify(notify) {}
 
   void init() {
     init_my_address();
@@ -192,6 +224,25 @@ class ProxyManager {
   void clean_up() {
     if (sock >= 0) close(sock);
     sock = -1;
+  }
+
+  void start(volatile sig_atomic_t* keep_running) {
+    try {
+      while (*keep_running) {
+        if (receive_msg()) {
+          try {
+            process_msg();
+          } catch (exception& e) {
+            cerr << "process_msg failed:" << endl;
+            cerr << e.what() << endl;
+          }
+        }
+      }
+    } catch (...) {
+      auto event = make_shared<EventProxyManagerCrashed>(current_exception());
+      notify(event);
+      throw;
+    }
   }
 };
 

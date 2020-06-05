@@ -1,28 +1,29 @@
 #ifndef EVENTS_HH
 #define EVENTS_HH
 
+#include <memory>
+#include <stdexcept>
+#include <vector>
+#include "proxyinfo.hh"
 #include "types.hh"
 
-enum EventType {
-  USER_INPUT,
-  PROXY_DISCOVERED,
-};
-
 struct Event {
-  EventType type;
-  virtual void makeMePolymorhic(){};
+  virtual void makeMePolymorphic(){};  // a virtual method needs to be here for dynamic_cast to work
 };
 
 struct EventUserInput : public Event {
-  EventType type = USER_INPUT;
   u8 input;
   EventUserInput(u8 input) : input(input) {}
 };
 
-struct EventProxyDiscovered : public Event {
-  EventType type = PROXY_DISCOVERED;
-  u64 id;
-  EventProxyDiscovered(u64 id) : id(id) {}
+struct EventProxiesChanged : public Event {
+  shared_ptr<vector<ProxyInfo>> proxies;
+  EventProxiesChanged(shared_ptr<vector<ProxyInfo>> proxies) : proxies(proxies) {}
+};
+
+struct EventProxyManagerCrashed : public Event {
+  exception_ptr exc;
+  EventProxyManagerCrashed(exception_ptr exc) : exc(exc) {}
 };
 
 #endif

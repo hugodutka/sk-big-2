@@ -9,6 +9,7 @@
 #include "cmd.hh"
 #include "events.hh"
 #include "model.hh"
+#include "proxy.hh"
 #include "telnet.hh"
 
 using namespace std;
@@ -44,7 +45,7 @@ int main(int argc, char** argv) {
       cerr << "Usage: " << argv[0] << " -H host -P port -p port [-T timeout]" << endl;
       return 1;
     }
-    Model model(cmd.tcp_port, cmd.proxy_host, cmd.proxy_port, &keep_running);
+    Model model(cmd.tcp_port, cmd.proxy_host, cmd.proxy_port, cmd.timeout, &keep_running);
     model.init();
     model.start();
 
