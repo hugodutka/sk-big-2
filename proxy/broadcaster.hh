@@ -65,9 +65,7 @@ class UDPBroadcaster : public Broadcaster {
   struct ip_mreq ip_mreq;
 
   static const size_t msg_buf_size = 65568;
-  static const size_t chunk_buf_size = 1024 + HEADER_SIZE;
   u8 msg_buf[msg_buf_size];
-  u8 chunk_buf[chunk_buf_size];
   ssize_t msg_len;
   sockaddr_in msg_sender;
 
@@ -93,6 +91,15 @@ class UDPBroadcaster : public Broadcaster {
     }
     msg_len = read_len;
     return true;
+  }
+
+  pair<shared_ptr<u8[]>, size_t> prepare_msg(u16 msg_type, const u8* data, size_t len) {
+    size_t msg_len = HEADER_SIZE + len;
+    shared_ptr<u8[]> msg(new u8[msg_len]);
+    ((u16*)msg.get())[0] = htons(msg_type);
+    ((u16*)msg.get())[1] = htons(static_cast<u16>(len));
+    memcpy(msg.get() + HEADER_SIZE, data, len);
+    return {msg, msg_len};
   }
 
   void send_msg(const sockaddr* addr, const u8* msg, size_t len) {
@@ -128,11 +135,8 @@ class UDPBroadcaster : public Broadcaster {
 
     if (msg_type == DISCOVER) {
       // Send back an IAM message
-      size_t response_len = HEADER_SIZE + radio_info.length();
-      shared_ptr<u8[]> response(new u8[response_len]);
-      ((u16*)response.get())[0] = htons(IAM);
-      ((u16*)response.get())[1] = htons(static_cast<u16>(radio_info.length()));
-      memcpy(response.get() + HEADER_SIZE, radio_info.c_str(), radio_info.length());
+      auto [response, response_len] =
+          prepare_msg(IAM, (u8*)radio_info.c_str(), radio_info.length());
       send_msg((sockaddr*)&msg_sender, response.get(), response_len);
     } else if (msg_type == KEEPALIVE) {
       // do nothing
@@ -178,23 +182,21 @@ class UDPBroadcaster : public Broadcaster {
   }
 
   void send_to_clients(u16 msg_type, const u8* data, size_t size) {
-    size_t chunk_size = chunk_buf_size - HEADER_SIZE;
+    size_t chunk_size = 1024;
     size_t remaining_size = size;
     size_t current_chunk_size;
     size_t offset;
 
-    // perform at least one iteration to send empty messages such as metadata
+    // perform at least one iteration to send empty messages
     do {
       offset = size - remaining_size;
       current_chunk_size = min(chunk_size, remaining_size);
       remaining_size -= current_chunk_size;
 
-      ((u16*)(chunk_buf))[0] = htons(msg_type);
-      ((u16*)(chunk_buf))[1] = htons(static_cast<u16>(current_chunk_size));
-      memcpy(chunk_buf + HEADER_SIZE, data + offset, current_chunk_size);
+      auto [msg, msg_len] = prepare_msg(msg_type, data + offset, current_chunk_size);
 
       for (auto it : clients) {
-        send_msg((sockaddr*)(&it.second->addr), chunk_buf, current_chunk_size + HEADER_SIZE);
+        send_msg((sockaddr*)(&it.second->addr), msg.get(), msg_len);
       }
     } while (remaining_size > 0);
   }
