@@ -120,7 +120,13 @@ class Model {
       }
     } else {
       // unrecognized input, do nothing
+      return false;
     }
+    return true;
+  }
+
+  bool react(__attribute__((unused)) EventNewTelnetConnection* event) {
+    // trigger a render
     return true;
   }
 
@@ -220,6 +226,8 @@ class Model {
     event_queue.pop();
     bool should_render = false;
     if (auto ev = dynamic_cast<EventUserInput*>(event.get())) {
+      should_render = react(ev);
+    } else if (auto ev = dynamic_cast<EventNewTelnetConnection*>(event.get())) {
       should_render = react(ev);
     } else if (auto ev = dynamic_cast<EventIamSent*>(event.get())) {
       should_render = react(ev);

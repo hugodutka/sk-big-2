@@ -182,6 +182,7 @@ class TelnetServer {
         while (*keep_running && !connection_open && !accept_new_connection()) {
           // try to get a connection
         }
+        if (!connection_open) notify(make_shared<EventNewTelnetConnection>());
         connection_open = true;
         try {
           const auto& [in, read_succeeded] = read_input();

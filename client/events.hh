@@ -21,6 +21,10 @@ struct EventUserInput : public Event {
   EventUserInput(u8 input) : input(input) {}
 };
 
+struct EventNewTelnetConnection : public Event {
+  EventNewTelnetConnection() {}
+};
+
 struct EventIamSent : public Event {
   u64 sender_id;
   i64 timestamp;
