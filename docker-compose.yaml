@@ -1,0 +1,17 @@
+version: "3"
+services:
+  m1:
+    image: sk-big-2
+    command: ./sk-big-2/radio-client "-H" "255.255.255.255" "-P" "16000" "-p" "8000"
+  m2:
+    image: sk-big-2
+    command: ./sk-big-2/radio-proxy "-h" "ant-waw-01.cdn.eurozet.pl" "-r" "/" "-p" "8602" "-m" "yes" "-P" "16000"
+  m3:
+    image: sk-big-2
+    command: ./sk-big-2/radio-proxy "-h" "waw02-03.ic.smcdn.pl" "-r" "/t050-1.mp3" "-p" "8000" "-m" "yes" "-P" "16000"
+  m4:
+    image: sk-big-2
+    command: ./sk-big-2/radio-proxy "-h" "waw02-03.ic.smcdn.pl" "-r" "/t050-1.mp3" "-p" "8000" "-m" "yes" "-P" "16000"
+  m5:
+    image: sk-big-2
+    command: ./sk-big-2/radio-proxy "-h" "waw02-03.ic.smcdn.pl" "-r" "/t050-1.mp3" "-p" "8000" "-m" "yes" "-P" "16000"
