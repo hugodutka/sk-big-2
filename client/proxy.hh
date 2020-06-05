@@ -86,9 +86,10 @@ class ProxyManager {
     ((u16*)(buf))[0] = htons(msg_type);
     ((u16*)(buf))[1] = htons(static_cast<u16>(len));
     memcpy(buf + HEADER_SIZE, msg, len);
+    len += HEADER_SIZE;
 
     while (sent < len) {
-      ssize_t sent_partial = sendto(sock, msg + sent, len, 0, addr, socklen);
+      ssize_t sent_partial = sendto(sock, buf + sent, len, 0, addr, socklen);
       if (sent_partial <= 0) throw runtime_error("sendto failed");
       sent += static_cast<size_t>(sent_partial);
     }
@@ -96,10 +97,9 @@ class ProxyManager {
 
   // Processes a message that is in msg_buf.
   void process_msg() {
-    if (msg_len != HEADER_SIZE) throw runtime_error("invalid message");
+    if (msg_len < HEADER_SIZE) throw runtime_error("invalid message");
     u16 msg_type = ntohs(((u16*)(&msg_buf))[0]);
     u16 msg_content_len = ntohs(((u16*)(&msg_buf))[1]);
-    if (msg_content_len != 0) throw runtime_error("invalid message length");
     u8* msg_content = msg_buf + HEADER_SIZE;
 
     u64 sender_id = hash_sockaddr_in(msg_sender);
@@ -176,9 +176,6 @@ class ProxyManager {
 
     if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (void*)&read_timeout, sizeof(read_timeout)) < 0)
       throw runtime_error("setsockopt set timeout failed");
-
-    if (bind(sock, (struct sockaddr*)&my_address, sizeof my_address) < 0)
-      throw runtime_error("bind failed");
   }
 
   void init_proxy_address() {
@@ -226,14 +223,17 @@ class ProxyManager {
     sock = -1;
   }
 
+  void discover_proxies() { send_msg((sockaddr*)(&proxy_address), DISCOVER, nullptr, 0); }
+
   void start(volatile sig_atomic_t* keep_running) {
     try {
       while (*keep_running) {
         if (receive_msg()) {
+          cerr << "got a message!" << endl;
           try {
             process_msg();
           } catch (exception& e) {
-            cerr << "process_msg failed:" << endl;
+            cerr << "process_msg failed - skipping the message. Failure reason:" << endl;
             cerr << e.what() << endl;
           }
         }

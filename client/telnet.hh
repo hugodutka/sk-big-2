@@ -45,7 +45,7 @@ class TelnetServer {
     server_address.sin_port = htons(port);
 
     if (bind(sock, (sockaddr*)&server_address, sizeof(server_address)) < 0) {
-      throw runtime_error("bind failed");
+      throw runtime_error("telnet bind failed");
     }
   }
 

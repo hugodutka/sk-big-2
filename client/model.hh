@@ -59,12 +59,12 @@ class Model {
 
   void init() {
     telnet->init();
+    proxy_manager->init();
+
     auto telnet_loop = [this]() {
       telnet->start(keep_running, [this](u8 in) { notify(make_shared<EventUserInput>(in)); });
     };
     telnet_ft = async(launch::async, telnet_loop);
-
-    proxy_manager->init();
     auto proxy_manager_loop = [this]() { proxy_manager->start(keep_running); };
     proxy_manager_ft = async(launch::async, proxy_manager_loop);
   }
@@ -98,7 +98,7 @@ class Model {
       cursor_line = cursor_line + 1;
     } else if (in.size() >= 2 && in[0] == 0 && in[1] == 13) {  // enter
       if (cursor_line == 1) {
-        cerr << "szukaj pośrednika" << endl;
+        proxy_manager->discover_proxies();
       } else if (cursor_line == num_options) {
         *keep_running = 0;
       } else {
