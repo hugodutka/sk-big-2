@@ -149,7 +149,7 @@ class Model {
     auto it = proxies.find(sender_id);
     if (it != proxies.end()) {
       auto proxy = it->second;
-      proxy->meta = *(event->meta);
+      proxy->meta = parse_metadata(*event->meta);
       proxies[sender_id]->last_contact = event->timestamp;
       return true;
     }

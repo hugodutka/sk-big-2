@@ -77,6 +77,8 @@ class UDPBroadcaster : public Broadcaster {
   atomic<bool> udp_server_crashed;
   exception_ptr udp_server_exception;
 
+  string last_meta;
+
   // Tries to read a message from sock into msg_buf. Saves the address of the sender in msg_sender.
   // Returns true if a message was read, false otherwise.
   bool receive_msg() {
@@ -138,6 +140,10 @@ class UDPBroadcaster : public Broadcaster {
       auto [response, response_len] =
           prepare_msg(IAM, (u8*)radio_info.c_str(), radio_info.length());
       send_msg((sockaddr*)&msg_sender, response.get(), response_len);
+      // Send a METADATA message
+      auto [meta_msg, meta_msg_len] =
+          prepare_msg(METADATA, (u8*)last_meta.c_str(), last_meta.length());
+      send_msg((sockaddr*)&msg_sender, meta_msg.get(), meta_msg_len);
     } else if (msg_type == KEEPALIVE) {
       // do nothing
     } else {
@@ -209,6 +215,7 @@ class UDPBroadcaster : public Broadcaster {
     multicast_initialized = false;
     udp_server_enabled = false;
     udp_server_crashed = false;
+    last_meta = "";
 
     // 64000 is an arbitrary number that fits into a UDP datagram
     if (radio_info.length() > 64000) throw runtime_error("radio_info is too long");
@@ -272,6 +279,7 @@ class UDPBroadcaster : public Broadcaster {
     send_to_clients(AUDIO, data, part.size);
     if (part.meta_present && part.meta.size() > 0) {
       send_to_clients(METADATA, (u8*)(part.meta.c_str()), part.meta.length());
+      last_meta = part.meta;
     }
     if (udp_server_crashed) rethrow_exception(udp_server_exception);
   }
