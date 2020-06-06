@@ -24,7 +24,7 @@ u64 hash_sockaddr_in(const sockaddr_in& addr) {
 }
 
 string parse_metadata(const string& meta) {
-  static std::regex rg_title("StreamTitle='(.+)'",
+  static std::regex rg_title("StreamTitle='(.*)'",
                              regex_constants::ECMAScript | regex_constants::icase);
   smatch match_groups;
   if (regex_search(meta, match_groups, rg_title)) {
