@@ -105,7 +105,11 @@ class Model {
       cursor_line = cursor_line + 1;
     } else if (in.size() >= 2 && in[0] == 0 && in[1] == 13) {  // enter
       if (cursor_line == 1) {
-        proxy_client->discover_proxies();
+        try {
+          proxy_client->discover_proxies();
+        } catch (...) {
+          // ignore errors
+        }
       } else if (cursor_line == num_options) {
         *keep_running = 0;
       } else {
@@ -203,7 +207,11 @@ class Model {
     if (current_time - last_keepalive >= 3500) {
       for (auto& pair : proxies) {
         auto proxy = pair.second;
-        proxy_client->send_keepalive(proxy->addr);
+        try {
+          proxy_client->send_keepalive(proxy->addr);
+        } catch (...) {
+          // ignore errors
+        }
       }
       last_keepalive = current_time;
     }
@@ -217,7 +225,11 @@ class Model {
       proxy_info_vector.push_back(proxies[id]);
     }
     string ui = generate_ui(proxy_info_vector);
-    telnet->render(ui, cursor_line);
+    try {
+      telnet->render(ui, cursor_line);
+    } catch (...) {
+      // ignore errors
+    }
   }
 
   void process_event_from_queue() {
