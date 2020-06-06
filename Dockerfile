@@ -5,5 +5,5 @@ USER hugodutka
 WORKDIR /home/hugodutka
 ARG cachebust=1
 RUN git clone https://github.com/hugodutka/sk-big-2
-RUN cd sk-big-2 && make
+RUN cd sk-big-2 && bash release.sh && tar xf zadanie2.tgz && cd zadanie2 && make && cp radio-* ../
 RUN mkdir -p /home/hugodutka/data
