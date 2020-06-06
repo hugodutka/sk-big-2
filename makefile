@@ -1,12 +1,14 @@
+CXX = g++
+CPPFLAGS = -std=c++17 -Wall -Wextra -O2 -lpthread
 TARGETS = radio-proxy radio-client
 
 all: $(TARGETS)
 
 radio-proxy:
-	g++ -std=c++17 -Wall -Wextra -O2 proxy/main.cc -o radio-proxy -lpthread
+	$(CXX) $(CPPFLAGS) proxy/main.cc -o radio-proxy
 
 radio-client:
-	g++ -std=c++17 -Wall -Wextra -O2 client/main.cc -o radio-client -lpthread
+	$(CXX) $(CPPFLAGS) client/main.cc -o radio-client
 
 clean:
 	rm -f $(TARGETS) 
